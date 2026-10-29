@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Loan Products{% endblock %}
+{% block body %}
+<h4 class="mb-3">Loan Products <small class="text-muted fs-6">interest · tenure · repayment method · fees</small></h4>
+<div class="card mb-3"><div class="table-responsive"><table class="table align-middle mb-0">
+<thead><tr><th>Name</th><th>Rate %</th><th>Amount range</th><th>Tenure (m)</th><th>Method</th><th>Fee %</th><th>Active</th><th>Admin only</th><th>Group loan</th><th></th></tr></thead>
+<tbody>{% for p in prods %}
+<tr>
+ <td><input form="pf{{ p['id'] }}" name="name" value="{{ p['name'] }}" class="form-control form-control-sm" style="min-width:150px"></td>
+ <td><input form="pf{{ p['id'] }}" name="rate" type="number" step="0.1" value="{{ p['rate'] }}" class="form-control form-control-sm" style="width:80px"></td>
+ <td class="d-flex gap-1"><input form="pf{{ p['id'] }}" name="min_amt" type="number" value="{{ p['min_amt']|int }}" class="form-control form-control-sm" style="width:95px"><input form="pf{{ p['id'] }}" name="max_amt" type="number" value="{{ p['max_amt']|int }}" class="form-control form-control-sm" style="width:100px"></td>
+ <td><div class="d-flex gap-1"><input form="pf{{ p['id'] }}" name="min_tenure" type="number" value="{{ p['min_tenure'] }}" class="form-control form-control-sm" style="width:65px"><input form="pf{{ p['id'] }}" name="max_tenure" type="number" value="{{ p['max_tenure'] }}" class="form-control form-control-sm" style="width:65px"></div></td>
+ <td><select form="pf{{ p['id'] }}" name="method" class="form-select form-select-sm"><option value="reducing" {{ 'selected' if p['method']=='reducing' }}>Reducing</option><option value="flat" {{ 'selected' if p['method']=='flat' }}>Flat</option></select></td>
+ <td><input form="pf{{ p['id'] }}" name="fee_pct" type="number" step="0.1" value="{{ p['fee_pct'] }}" class="form-control form-control-sm" style="width:70px"></td>
+ <td><input form="pf{{ p['id'] }}" type="checkbox" name="active" {{ 'checked' if p['active'] }}></td>
+ <td><input form="pf{{ p['id'] }}" type="checkbox" name="admin_only" {{ 'checked' if p['admin_only'] }}></td>
+ <td><input form="pf{{ p['id'] }}" type="checkbox" name="group_only" {{ 'checked' if p['group_only'] }}></td>
+ <td><button form="pf{{ p['id'] }}" class="btn btn-sm btn-outline-primary">Save</button></td>
+</tr>{% endfor %}</tbody></table></div></div>
+{% for p in prods %}<form id="pf{{ p['id'] }}" method="post"><input type="hidden" name="id" value="{{ p['id'] }}"></form>{% endfor %}
+<div class="card"><div class="card-header">Add product</div><form method="post" class="card-body row g-2">
+ <div class="col-12 col-md-3"><input name="name" placeholder="Product name" class="form-control" required></div>
+ <div class="col-6 col-md-1"><input name="rate" type="number" step="0.1" placeholder="Rate %" class="form-control" required></div>
+ <div class="col-6 col-md-2"><input name="min_amt" type="number" placeholder="Min amount" class="form-control" required></div>
+ <div class="col-6 col-md-2"><input name="max_amt" type="number" placeholder="Max amount" class="form-control" required></div>
+ <div class="col-3 col-md-1"><input name="min_tenure" type="number" placeholder="Min m" class="form-control" required></div>
+ <div class="col-3 col-md-1"><input name="max_tenure" type="number" placeholder="Max m" class="form-control" required></div>
+ <div class="col-6 col-md-1"><select name="method" class="form-select"><option value="reducing">Reducing</option><option value="flat">Flat</option></select></div>
+ <div class="col-6 col-md-1"><input name="fee_pct" type="number" step="0.1" placeholder="Fee %" value="1" class="form-control"></div>
+ <div class="col-12 small"><label class="me-3"><input type="checkbox" name="admin_only"> Admin only (only the Admin can issue it)</label><label><input type="checkbox" name="group_only"> Group loan (must be applied for from a verified group)</label></div>
+ <div class="col-12"><button class="btn btn-primary">Add product</button></div>
+</form></div>
+{% endblock %}

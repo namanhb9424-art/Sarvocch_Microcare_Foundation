@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Attendance{% endblock %}
+{% block body %}
+<h4 class="mb-3">Attendance</h4>
+<div class="row g-3 mb-3">
+ <div class="col-12 col-lg-5"><div class="card h-100"><div class="card-header">Today</div><div class="card-body">
+  {% if br %}<div class="small text-muted mb-2"><i class="bi bi-geo-alt"></i> {{ br['name'] }} · punch-out allowed within {{ (br['radius_m']/1000)|round(1) }} km of the office and after {{ hours_needed|round(2) }} hours of work</div>{% endif %}
+  <form method="post" action="{{ url_for('attendance_punch') }}" class="geo d-flex flex-wrap align-items-center gap-2">
+   <input type="hidden" name="lat"><input type="hidden" name="lng">
+   {% if not today_rec %}<button class="btn btn-success" name="kind" value="in"><i class="bi bi-box-arrow-in-right"></i> Punch in</button><span class="small text-muted">Not punched in yet</span>
+   {% elif not today_rec['out_time'] %}<span class="text-success">In since {{ today_rec['in_time'][11:16] }}{% if today_rec['in_dist'] is not none %} ({{ (today_rec['in_dist']/1000)|round(1) }} km from office){% endif %}</span>
+     <button class="btn btn-warning" name="kind" value="out"><i class="bi bi-box-arrow-right"></i> Punch out</button>
+   {% else %}<span class="text-success">In {{ today_rec['in_time'][11:16] }} · Out {{ today_rec['out_time'][11:16] }}</span>{% endif %}
+  </form>
+  <div class="small text-muted mt-2" id="geomsg">Your phone's location is used only when you punch.</div>
+ </div></div></div>
+ <div class="col-12 col-lg-7"><div class="card h-100"><div class="card-header">Request an attendance change</div>
+  <form method="post" action="{{ url_for('attendance_request') }}" class="card-body row g-2">
+   <div class="col-6 col-md-3"><label class="form-label small mb-0">Date</label><input type="date" name="day" id="rqday" max="{{ today }}" class="form-control form-control-sm" required></div>
+   <div class="col-3 col-md-2"><label class="form-label small mb-0">In</label><input type="time" name="in_time" value="09:30" class="form-control form-control-sm" required></div>
+   <div class="col-3 col-md-2"><label class="form-label small mb-0">Out</label><input type="time" name="out_time" value="18:00" class="form-control form-control-sm" required></div>
+   <div class="col-12 col-md-5"><label class="form-label small mb-0">Reason</label><input name="reason" class="form-control form-control-sm" maxlength="200" required></div>
+   <div class="col-12 d-flex align-items-center gap-3"><button class="btn btn-sm btn-primary">Send request</button>
+    <span class="small text-muted">{% if g.user['role']=='admin' %}Admin changes are applied directly and logged.{% elif ap_name %}Goes to {{ ap_name }} ({{ ap_role }}).{% else %}Goes to your {{ ap_role }}.{% endif %}
+     {% if g.user['role']=='manager' %} Managers' changes need Admin approval.{% endif %}</span></div>
+  </form></div></div>
+</div>
+
+{% if to_decide %}
+<div class="card mb-3 border-warning"><div class="card-header">Waiting for your approval ({{ to_decide|length }})</div><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+ <thead><tr><th>Staff</th><th>Date</th><th>In - Out</th><th>Reason</th><th>Decision</th></tr></thead><tbody>
+ {% for r in to_decide %}<tr><td>{{ r['uname'] }}<div class="small text-muted">{{ r['urole'].replace('_',' ') }} · {{ r['ubranch'] }}</div></td><td>{{ r['day']|dt }}</td><td>{{ r['in_time'] }} - {{ r['out_time'] }}</td><td class="small text-wrap" style="min-width:160px">{{ r['reason'] }}</td>
+ <td><form method="post" action="{{ url_for('attendance_decide', rid=r['id']) }}" class="d-flex gap-1"><input name="remarks" class="form-control form-control-sm" placeholder="Remarks" style="min-width:110px">
+   <button name="action" value="approve" class="btn btn-sm btn-success">Approve</button><button name="action" value="reject" class="btn btn-sm btn-outline-danger">Reject</button></form></td></tr>{% endfor %}</tbody></table></div></div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+ <div class="col-12 col-xl-7"><div class="card"><div class="card-header">My last 31 days</div><div class="table-responsive" style="max-height:420px"><table class="table table-sm mb-0">
+  <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th><th></th></tr></thead><tbody>
+  {% for h in hist %}<tr class="{{ 'table-light text-muted' if h.status=='Weekend' else ('table-warning' if h.status=='No record') }}"><td>{{ h.day|dt }}</td>
+   <td>{{ h.rec['in_time'][11:16] if h.rec and h.rec['in_time'] else '-' }}</td><td>{{ h.rec['out_time'][11:16] if h.rec and h.rec['out_time'] else '-' }}</td><td>{{ h.hours if h.hours is not none else '-' }}</td>
+   <td>{{ h.status }}{% if h.regularised %} <span class="badge text-bg-info">regularised</span>{% endif %}</td>
+   <td>{% if h.status!='Weekend' %}<a href="#" class="small rq" data-day="{{ h.day }}">Request change</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div></div>
+ <div class="col-12 col-xl-5"><div class="card"><div class="card-header">My requests</div><ul class="list-group list-group-flush small">
+  {% for r in mine_req %}<li class="list-group-item"><b>{{ r['day']|dt }}</b> {{ r['in_time'] }}-{{ r['out_time'] }}
+    <span class="badge text-bg-{{ {'pending':'warning','approved':'success','rejected':'danger'}[r['status']] }}">{{ r['status'] }}</span>
+    <div class="text-muted">{{ r['reason'] }}{% if r['decided_by'] %} · {{ r['decided_by'] }}{% if r['remarks'] %}: {{ r['remarks'] }}{% endif %}{% elif r['approver'] %} · waiting for {{ r['approver'] }}{% endif %}</div></li>
+  {% else %}<li class="list-group-item text-muted">No requests</li>{% endfor %}</ul></div></div>
+</div>
+
+{% if team %}
+<div class="card"><div class="card-header">Team today</div><div class="table-responsive"><table class="table table-sm mb-0">
+ <thead><tr><th>Name</th><th>Role</th><th>Branch</th><th>In</th><th>Out</th><th>Distance in / out (km)</th></tr></thead><tbody>
+ {% for t in team %}<tr><td>{{ t['name'] }}</td><td class="small">{{ t['role'].replace('_',' ') }}</td><td class="small">{{ t['branch'] }}</td>
+  <td>{{ t['in_time'][11:16] if t['in_time'] else '-' }}</td><td>{{ t['out_time'][11:16] if t['out_time'] else '-' }}</td>
+  <td class="small">{{ (t['in_dist']/1000)|round(1) if t['in_dist'] is not none else '-' }} / {{ (t['out_dist']/1000)|round(1) if t['out_dist'] is not none else '-' }}</td></tr>{% endfor %}</tbody></table></div></div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.rq').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();const d=document.getElementById('rqday');d.value=a.dataset.day;d.scrollIntoView({behavior:'smooth',block:'center'});d.focus();}));
+document.querySelectorAll('form.geo').forEach(f=>{
+  f.addEventListener('submit',e=>{
+    if(f.dataset.ready) return; e.preventDefault();
+    const btn=e.submitter; const send=()=>{f.dataset.ready='1'; if(btn){const h=document.createElement('input');h.type='hidden';h.name=btn.name;h.value=btn.value;f.appendChild(h);} f.submit();};
+    const m=document.getElementById('geomsg'); if(m) m.textContent='Getting your location…';
+    if(!navigator.geolocation) return send();
+    navigator.geolocation.getCurrentPosition(p=>{f.lat.value=p.coords.latitude;f.lng.value=p.coords.longitude;send();},()=>send(),{enableHighAccuracy:true,timeout:8000,maximumAge:0});
+  });
+});
+</script>
+{% endblock %}

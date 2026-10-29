@@ -1,0 +1,9 @@
+instance/
+uploads/
+__pycache__/
+*.pyc
+*.db
+.env
+.venv/
+venv/
+.vercel/

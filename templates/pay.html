@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Pay EMI{% endblock %}
+{% block body %}
+<div class="row justify-content-center"><div class="col-12 col-md-8 col-lg-6">
+<div class="alert alert-info small">Demo payment gateway - <b>no real money moves</b>, nothing is sent to any bank, and card numbers are never stored. A real gateway (e.g. Razorpay / Cashfree / PayU) plugs in at this step later; those charge per transaction.</div>
+<div class="card"><div class="card-body">
+  <h5>Loan #{{ loan['id'] }} · EMI #{{ nxt['no'] }}</h5>
+  <div class="fs-3 mb-1">{{ nxt['emi']|inr }}</div><div class="small text-muted mb-3">Due {{ nxt['due_date']|dt }}</div>
+  <form method="post">
+    <ul class="nav nav-pills mb-3" id="tabs">
+      {% for k,l in [('upi','UPI'),('card','Card'),('netbanking','Net banking'),('wallet','Wallet')] %}<li class="nav-item"><a href="#" class="nav-link {{ 'active' if loop.first }}" data-ch="{{ k }}">{{ l }}</a></li>{% endfor %}
+    </ul>
+    <input type="hidden" name="channel" id="channel" value="upi">
+    <div class="ch" id="ch-upi"><input name="upi_id" class="form-control" placeholder="yourname@upi"></div>
+    <div class="ch d-none" id="ch-card"><input name="card_no" class="form-control mb-2" placeholder="4111 1111 1111 1111" inputmode="numeric"><div class="row g-2"><div class="col"><input class="form-control" placeholder="MM/YY"></div><div class="col"><input class="form-control" placeholder="CVV" type="password" maxlength="4"></div></div></div>
+    <div class="ch d-none" id="ch-netbanking"><select name="bank" class="form-select"><option value="">Choose bank</option><option>State Bank of India</option><option>HDFC Bank</option><option>ICICI Bank</option><option>Axis Bank</option><option>Bank of Baroda</option></select></div>
+    <div class="ch d-none" id="ch-wallet"><select name="wallet" class="form-select"><option value="">Choose wallet</option><option>Paytm</option><option>PhonePe</option><option>Amazon Pay</option><option>MobiKwik</option></select></div>
+    <button class="btn btn-success w-100 mt-3">Pay {{ nxt['emi']|inr }}</button>
+  </form>
+</div></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('#tabs a').forEach(a=>a.onclick=e=>{e.preventDefault();
+  document.querySelectorAll('#tabs a').forEach(x=>x.classList.remove('active'));a.classList.add('active');
+  document.querySelectorAll('.ch').forEach(c=>c.classList.add('d-none'));
+  document.getElementById('ch-'+a.dataset.ch).classList.remove('d-none');document.getElementById('channel').value=a.dataset.ch;});
+</script>
+{% endblock %}

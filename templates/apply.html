@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}New Application{% endblock %}
+{% macro num(name, label, cls='col-6 col-md-4') %}<div class="{{ cls }}"><label class="form-label small mb-0">{{ label }}</label><input name="{{ name }}" type="number" min="0" step="1" value="{{ form.get(name,'') }}" class="form-control form-control-sm cf"></div>{% endmacro %}
+{% block body %}
+{% set docs_checked = form.getlist('docs_dep') if form.getlist is defined else [] %}
+<h4 class="mb-1">Loan Application <small class="text-muted fs-6">/ ऋण आवेदन (आय-वृद्धि)</small></h4>
+<p class="small text-muted">Fill the customer's KYC form first. Everything below follows the paper loan-application form.</p>
+<form method="post" enctype="multipart/form-data" class="row g-3">
+  <div class="col-12"><div class="card"><div class="card-header">1 · Customer &amp; loan</div><div class="card-body row g-2">
+    <div class="col-12 col-md-4"><label class="form-label">Customer *</label><select name="customer_id" id="cust" class="form-select" required><option value="">Select…</option>
+      {% for c in customers %}<option value="{{ c['id'] }}" data-form="{{ c['has_form'] }}" data-cycle="{{ c['cycle'] }}" data-co="{{ (c['co_name'] ~ ' (' ~ (c['co_relation'] or '-') ~ ') · income ₹' ~ (c['co_income']|int)) if c['co_name'] else 'none' }}" {{ 'selected' if form.get('customer_id')|string==c['id']|string }}>{{ c['name'] }} ({{ c['phone'] }}){{ '' if c['kyc_status']=='verified' else ' - KYC pending' }}{{ '' if c['has_form'] else ' - NO KYC FORM' }}</option>{% endfor %}</select>
+      <div class="text-danger small d-none" id="noform">This customer has no KYC form yet. <a id="noformlink" href="#">Fill it first</a>.</div></div>
+    <div class="col-12 col-md-4"><label class="form-label">Product *</label><select name="product_id" id="product" class="form-select" required>
+      {% for p in prods %}<option value="{{ p['id'] }}" data-rate="{{ p['rate'] }}" data-m="{{ p['method'] }}" data-min="{{ p['min_amt']|int }}" data-max="{{ p['max_amt']|int }}" data-tmin="{{ p['min_tenure'] }}" data-tmax="{{ p['max_tenure'] }}" {{ 'selected' if form.get('product_id')|string==p['id']|string }}>{{ p['name'] }} · {{ p['rate'] }}%</option>{% endfor %}</select>
+      <div class="form-text" id="limits"></div></div>
+    <div class="col-6 col-md-2"><label class="form-label">Amount (₹) *</label><input name="amount" id="amount" type="number" min="1" value="{{ form.get('amount','') }}" class="form-control" required></div>
+    <div class="col-6 col-md-2"><label class="form-label">Tenure (m) *</label><input name="tenure" id="tenure" type="number" min="1" value="{{ form.get('tenure','') }}" class="form-control" required></div>
+    <div class="col-6 col-md-2"><label class="form-label">Loan cycle *</label><input name="loan_cycle" id="cycle" type="number" min="1" max="50" value="{{ form.get('loan_cycle','') }}" class="form-control" required></div>
+    <div class="col-12 col-md-10"><label class="form-label">Purpose of loan</label><input name="purpose" value="{{ form.get('purpose','') }}" class="form-control"></div>
+    <div class="col-12"><div class="alert alert-secondary py-2 mb-0" id="emiline">EMI preview appears here</div></div>
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header d-flex justify-content-between"><span>2 · Previous loans / पिछले ऋण (up to 6)</span><button type="button" class="btn btn-sm btn-outline-primary" id="addpl">Add row</button></div>
+    <div class="card-body"><div class="small text-muted mb-2" id="plnote">Loans already taken from Sarvocch are filled in automatically when you pick a customer. You can edit them.</div><div id="plrows"></div></div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">3 · Monthly cash flow / मुद्रा प्रवाह (₹ per month)</div><div class="card-body">
+    <div class="row g-2"><div class="col-12 col-lg-6"><div class="fw-semibold small mb-1">Income / आय</div><div class="row g-2">
+      {% for k,l in K.inc_fields %}{{ num(k, l) }}{% endfor %}</div>
+      <div class="mt-2">Total income: <b id="tinc">0</b></div></div>
+    <div class="col-12 col-lg-6"><div class="fw-semibold small mb-1">Expenses / व्यय</div><div class="row g-2">
+      {% for k,l in K.exp_fields %}{{ num(k, l) }}{% endfor %}</div>
+      <div class="mt-2">Total expenses: <b id="texp">0</b></div></div></div>
+    <div class="alert alert-info py-2 mt-3 mb-0">Net monthly saving / शुद्ध बचत: <b id="tnet">0</b> <span id="netwarn" class="text-danger ms-2"></span></div>
+    <div class="row g-2 mt-1"><div class="col-6 col-md-4"><label class="form-label small mb-0">Occupation</label><input name="occupation" value="{{ form.get('occupation','') }}" class="form-control form-control-sm"></div>
+    <div class="col-6 col-md-4"><label class="form-label small mb-0">Employer / business</label><input name="employer" value="{{ form.get('employer','') }}" class="form-control form-control-sm"></div></div>
+  </div></div></div>
+
+  <div class="col-12"><div class="alert alert-secondary py-2 mb-0 small" id="coinfo"><b>Co-applicant:</b> <span id="cotext">select a customer</span>
+    <span class="text-muted">(entered in the customer's KYC form; edit it there)</span></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">4 · Documents deposited / जमा दस्तावेज़ (tick at least two) &amp; uploads</div><div class="card-body">
+    <div class="d-flex flex-wrap gap-3 mb-2">{% for k,l in K.docs %}<div class="form-check"><input class="form-check-input" type="checkbox" name="docs_dep" value="{{ k }}" id="dd{{ k }}" {{ 'checked' if k in docs_checked }}><label class="form-check-label" for="dd{{ k }}">{{ l }}</label></div>{% endfor %}</div>
+    <div class="row g-2"><div class="col-12 col-md-4"><label class="form-label small mb-0">If other, which?</label><input name="docs_other" value="{{ form.get('docs_other','') }}" class="form-control form-control-sm"></div></div>
+    <hr><div class="row g-2">(PDF / JPG / PNG, max 16 MB)
+    <div class="col-12 col-md-3"><label class="form-label">ID proof</label><input type="file" name="doc_id" accept=".pdf,.jpg,.jpeg,.png" class="form-control"></div>
+    <div class="col-12 col-md-3"><label class="form-label">Address proof</label><input type="file" name="doc_address" accept=".pdf,.jpg,.jpeg,.png" class="form-control"></div>
+    <div class="col-12 col-md-3"><label class="form-label">Income proof</label><input type="file" name="doc_income" accept=".pdf,.jpg,.jpeg,.png" class="form-control"></div>
+    <div class="col-12 col-md-3"><label class="form-label">Photo</label><input type="file" name="doc_photo" accept="image/*" capture="user" class="form-control"></div></div>
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">5 · Life insurance / जीवन बीमा</div><div class="card-body">
+    <div class="mb-2">{% for v_,l_ in (('yes','Yes, I want insurance / हाँ'),('no','No / नहीं')) %}<div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="insurance_wanted" value="{{ v_ }}" id="in{{ v_ }}" {{ 'checked' if form.get('insurance_wanted','no')==v_ }}><label class="form-check-label" for="in{{ v_ }}">{{ l_ }}</label></div>{% endfor %}</div>
+    <div id="insbox" class="ps-3 border-start">
+      <div class="mb-2">For: {% for v_,l_ in (('husband','Husband / पति'),('self','Self / स्वयं'),('both','Both / दोनों')) %}<div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="insurance_for" value="{{ v_ }}" id="if{{ v_ }}" {{ 'checked' if form.get('insurance_for')==v_ }}><label class="form-check-label" for="if{{ v_ }}">{{ l_ }}</label></div>{% endfor %}</div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="insurance_ack" id="insack" {{ 'checked' if form.get('insurance_ack') }}><label class="form-check-label small" for="insack">I understand the premium is collected with the loan and the cover is explained to me. / मुझे प्रीमियम और बीमा कवर की जानकारी दे दी गई है।</label></div></div>
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">6 · Recommendation / अनुशंसा (optional)</div><div class="card-body row g-2">
+    <div class="col-6 col-md-3"><label class="form-label">Group leader recommends (₹)</label><input name="group_rec" type="number" min="0" value="{{ form.get('group_rec','') }}" class="form-control"></div>
+    <div class="col-6 col-md-3"><label class="form-label">Centre leader recommends (₹)</label><input name="center_rec" type="number" min="0" value="{{ form.get('center_rec','') }}" class="form-control"></div>
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-body">
+    <div class="form-check"><input class="form-check-input" type="checkbox" name="app_declaration" id="decl" {{ 'checked' if form.get('app_declaration') }}><label class="form-check-label" for="decl">I declare that the information given is correct and I will repay the loan on time. / मैं घोषणा करती हूँ कि दी गई जानकारी सही है और मैं ऋण समय पर चुकाऊँगी।</label></div>
+  </div></div></div>
+  <div class="col-12 mb-4"><button class="btn btn-primary btn-lg" id="submitbtn">Submit application</button></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const $=id=>document.getElementById(id);
+const PREV={{ prev_map|tojson }}, FORM_ROWS={{ prev_rows|tojson }}, FREQS={{ K.freqs|tojson }};
+const KYCNEW="{{ url_for('kyc_form_edit', cid=0) }}".replace(/0\/kyc-form$/,'');
+function emi(P,r,n,m){ if(!P||!n) return 0; if(m==='flat') return (P+P*r/100*n/12)/n; const i=r/1200; return i? P*i*Math.pow(1+i,n)/(Math.pow(1+i,n)-1):P/n; }
+function upd(){ const o=$('product').selectedOptions[0]; if(!o) return;
+  $('limits').textContent='Amount ₹'+o.dataset.min+' – ₹'+o.dataset.max+' · Tenure '+o.dataset.tmin+'–'+o.dataset.tmax+' months';
+  const e=emi(+$('amount').value,+o.dataset.rate,+$('tenure').value,o.dataset.m);
+  $('emiline').textContent=e? 'Estimated EMI: ₹'+e.toFixed(2)+' / month ('+o.dataset.m+' balance @ '+o.dataset.rate+'%)':'Enter amount and tenure to preview the EMI'; flow(); }
+function flow(){ let inc=0,exp=0; document.querySelectorAll('.cf').forEach(i=>{ if(i.name.startsWith('inc_')) inc+=+i.value||0; else exp+=+i.value||0; });
+  $('tinc').textContent=inc.toLocaleString('en-IN'); $('texp').textContent=exp.toLocaleString('en-IN'); const net=inc-exp; $('tnet').textContent=net.toLocaleString('en-IN');
+  const e=emi(+$('amount').value,+($('product').selectedOptions[0]||{dataset:{}}).dataset.rate,+$('tenure').value,($('product').selectedOptions[0]||{dataset:{}}).dataset.m);
+  $('netwarn').textContent = e>net && net>0 ? 'EMI is higher than net saving' : (net<=0&&inc>0?'Expenses exceed income':''); }
+let pl=0; const rows=$('plrows');
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function addPl(r){ if(rows.children.length>=6){alert('Up to 6 previous loans.');return;} r=r||{}; const d=document.createElement('div'); d.className='row g-2 border-bottom pb-2 mb-2';
+  d.innerHTML=`<div class="col-6 col-md-2"><label class="form-label small mb-0">Amount ₹</label><input name="pl_amount" type="number" min="1" class="form-control form-control-sm" value="${esc(r.amount?Math.round(r.amount):'')}"></div>
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">Purpose</label><input name="pl_purpose" class="form-control form-control-sm" value="${esc(r.purpose)}"></div>
+  <div class="col-6 col-md-2"><label class="form-label small mb-0">Repayment</label><select name="pl_freq" class="form-select form-select-sm"><option value="">-</option>${FREQS.map(f=>`<option value="${f[0]}" ${f[0]==r.freq?'selected':''}>${esc(f[1].split(' / ')[0])}</option>`).join('')}</select></div>
+  <div class="col-6 col-md-2"><label class="form-label small mb-0">Paid</label><select name="pl_ontime" class="form-select form-select-sm"><option value="">-</option><option value="on_time" ${r.ontime=='on_time'?'selected':''}>On time</option><option value="late" ${r.ontime=='late'?'selected':''}>Late</option></select></div>
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">If late – reason</label><input name="pl_reason" class="form-control form-control-sm" value="${esc(r.reason)}"></div>
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">Absence from meetings – reason</label><input name="pl_absence" class="form-control form-control-sm" value="${esc(r.absence)}"></div>
+  <div class="col-6 col-md-2 d-flex align-items-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()">Remove</button></div>`; rows.appendChild(d); }
+$('addpl').onclick=()=>addPl();
+function custChange(auto){ const o=$('cust').selectedOptions[0]; const has=o&&o.value?o.dataset.form==='1':true;
+  $('noform').classList.toggle('d-none',has); if(o&&o.value){ $('noformlink').href=KYCNEW+o.value+'/kyc-form'; }
+  $('submitbtn').disabled=!has; $('cotext').textContent=(o&&o.value)?(o.dataset.co||'none'):'select a customer';
+  if(auto&&o&&o.value){ if(!$('cycle').value) $('cycle').value=o.dataset.cycle; rows.innerHTML=''; (PREV[o.value]||[]).forEach(addPl); } }
+$('cust').addEventListener('change',()=>{ $('cycle').value=''; custChange(true); });
+['product','amount','tenure'].forEach(i=>$(i).addEventListener('input',upd));
+document.querySelectorAll('.cf').forEach(i=>i.addEventListener('input',flow));
+function insToggle(){ const y=document.querySelector('input[name=insurance_wanted]:checked'); $('insbox').style.display=(y&&y.value==='yes')?'':'none'; }
+document.querySelectorAll('input[name=insurance_wanted]').forEach(i=>i.addEventListener('change',insToggle));
+if(FORM_ROWS.length) FORM_ROWS.forEach(addPl); custChange(!FORM_ROWS.length); insToggle(); upd();
+</script>
+{% endblock %}

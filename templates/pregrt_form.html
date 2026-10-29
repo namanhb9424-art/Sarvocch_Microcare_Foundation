@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Pre-GRT{% endblock %}
+{% block body %}
+{% set ro = not editable %}
+<a href="{{ url_for('pregrt_list') }}" class="small text-decoration-none">&larr; Pre-GRT list</a>
+<div class="d-flex flex-wrap justify-content-between align-items-center my-2 gap-2">
+  <h4 class="mb-0">Pre-GRT · Group form {% if p %}#{{ p['id'] }} <span class="badge text-bg-{{ {'draft':'secondary','submitted':'info','verified':'success'}.get(p['status'],'light') }} fs-6">{{ p['status'] }}</span>{% endif %}</h4>
+  {% if p and p['status']=='verified' and can('apply') %}<a class="btn btn-sm btn-success" href="{{ url_for('group_apply', pid=p['id']) }}"><i class="bi bi-people"></i> Apply for group loan</a>{% endif %}
+  {% if p %}<a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ url_for('pregrt_print', pid=p['id']) }}"><i class="bi bi-printer"></i> Print</a>{% endif %}
+</div>
+{% if p and p['review_remarks'] and p['status']!='verified' %}<div class="alert alert-warning py-2 small"><b>Reviewer note:</b> {{ p['review_remarks'] }}</div>{% endif %}
+{% if p and p['status']=='verified' %}<div class="alert alert-success py-2 small">Verified by {{ p['verified_by'] }} on {{ p['verified_on']|dt }}.{% if p['review_remarks'] %} {{ p['review_remarks'] }}{% endif %}</div>{% endif %}
+{% if ro and p and p['status']=='submitted' %}<div class="alert alert-info py-2 small">Submitted – waiting for the branch manager's review. The form is locked.</div>{% endif %}
+
+<form method="post" id="gform" autocomplete="off">
+<input type="hidden" name="rows" id="rows" value="">
+<fieldset {{ 'disabled' if ro }}>
+<div class="card mb-3"><div class="card-header">Group details / समूह विवरण</div><div class="card-body row g-2">
+  <div class="col-6 col-md-3"><label class="form-label">Branch *</label><select name="branch" class="form-select">{% for b in BRANCHES %}<option {{ 'selected' if h.get('branch')==b }}>{{ b }}</option>{% endfor %}</select></div>
+  <div class="col-6 col-md-3"><label class="form-label">Date *</label><input type="date" name="form_date" class="form-control" max="{{ today }}" value="{{ h.get('form_date','') }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label">Centre no.</label><input name="center_no" class="form-control" value="{{ h.get('center_no','') }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label">Group no.</label><input name="group_no" class="form-control" value="{{ h.get('group_no','') }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label">Village</label><input name="village" class="form-control" value="{{ h.get('village','') }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label">District</label><input name="district" class="form-control" value="{{ h.get('district','') }}"></div>
+  <div class="col-12 col-md-3"><label class="form-label">Field officer *</label>
+    {% if g.user['role']=='field_agent' %}<input class="form-control" value="{{ g.user['name'] }}" disabled>{% else %}
+    <select name="agent_id" class="form-select"><option value="">Select…</option>{% for a in agents %}<option value="{{ a['id'] }}" {{ 'selected' if h.get('agent_id')|string==a['id']|string }}>{{ a['name'] }}</option>{% endfor %}</select>{% endif %}</div>
+  <div class="col-6 col-md-3"><label class="form-label">PSO name</label><input name="pso_name" class="form-control" value="{{ h.get('pso_name','') }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label">PSO employee ID</label><input name="pso_empid" class="form-control" value="{{ h.get('pso_empid','') }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label">Branch manager</label><input name="bm_name" class="form-control" value="{{ h.get('bm_name','') }}"></div>
+  <div class="col-6 col-md-3"><label class="form-label">BM employee ID</label><input name="bm_empid" class="form-control" value="{{ h.get('bm_empid','') }}"></div>
+  <div class="col-12 col-md-6"><label class="form-label d-block">Group leader knows her duties &amp; responsibilities? / क्या समूह लीडर को अपने कर्तव्य ज्ञात हैं?</label>
+    {% for v_,l_ in (('yes','Yes / हाँ'),('no','No / नहीं')) %}<div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="leader_knows_duties" value="{{ v_ }}" id="ld{{ v_ }}" {{ 'checked' if h.get('leader_knows_duties')==v_ }}><label class="form-check-label" for="ld{{ v_ }}">{{ l_ }}</label></div>{% endfor %}</div>
+  <div class="col-12 col-md-6"><label class="form-label">Notes</label><input name="notes" class="form-control" maxlength="500" value="{{ h.get('notes','') }}"></div>
+</div></div>
+
+<div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center">
+  <span>Members ({{ K.pregrt_min }}–{{ K.pregrt_max }}) / सदस्य</span>
+  {% if not ro %}<span class="d-flex gap-2"><select id="pick" class="form-select form-select-sm" style="width:auto"><option value="">Add registered customer…</option>{% for id_, c in pick.items() %}<option value="{{ id_ }}">{{ c.name }} ({{ cust_code(id_) }})</option>{% endfor %}</select>
+  <button type="button" class="btn btn-sm btn-primary" id="addm"><i class="bi bi-plus-lg"></i> Blank row</button></span>{% endif %}</div>
+  <div class="card-body" id="members"></div></div>
+</fieldset>
+
+<div class="d-flex flex-wrap gap-2 mb-4">
+  {% if not ro %}<button class="btn btn-outline-primary" name="action" value="draft">Save draft</button>
+  <button class="btn btn-primary" name="action" value="submit">Submit for review</button>{% endif %}
+</div>
+</form>
+
+{% if can_review %}
+<div class="card mb-4"><div class="card-header">Manager review</div><div class="card-body">
+  <form method="post" action="{{ url_for('pregrt_review', pid=p['id']) }}" class="row g-2">
+    <div class="col-12 col-md-8"><input name="remarks" class="form-control" placeholder="Remarks (required when returning)"></div>
+    <div class="col-12 col-md-4 d-flex gap-2"><button name="action" value="verify" class="btn btn-success flex-fill">Verify</button><button name="action" value="return" class="btn btn-outline-danger flex-fill">Return</button></div>
+  </form></div></div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const PICK={{ pick|tojson }}, CHECKS={{ K.pregrt_checks|tojson }}, CATS={{ K.categories|tojson }}, HOUSES={{ K.house_types|tojson }}, FREQS={{ K.freqs|tojson }};
+const INIT={{ members|tojson }}, RO={{ 'true' if ro else 'false' }}, MAX={{ K.pregrt_max }};
+let seq=0; const box=document.getElementById('members');
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function opts(list,sel,pairs){return '<option value="">-</option>'+list.map(o=>{const v=pairs?o[0]:o,l=pairs?o[1]:o;return `<option value="${esc(v)}" ${v==sel?'selected':''}>${esc(l)}</option>`}).join('')}
+function fld(i,k,label,val,type,extra){return `<div class="col-6 col-md-3"><label class="form-label small mb-0">${label}</label><input name="m${i}_${k}" type="${type||'text'}" value="${esc(val)}" class="form-control form-control-sm" ${extra||''}></div>`}
+function add(m){
+  if(box.children.length>=MAX){alert('A group can have at most '+MAX+' members.');return;}
+  m=m||{}; const i=++seq, n=box.children.length+1;
+  const d=document.createElement('div'); d.className='border rounded p-2 mb-3'; d.dataset.i=i;
+  d.innerHTML=`<div class="d-flex justify-content-between mb-1"><b class="mno">Member ${n}</b>${RO?'':'<button type="button" class="btn btn-sm btn-outline-danger rm">Remove</button>'}</div>
+  <input type="hidden" name="m${i}_customer" value="${esc(m.customer_id)}">
+  <div class="row g-2">${fld(i,'name','Borrower name *',m.name)}${fld(i,'husband','Husband / father name *',m.husband_name)}
+  ${fld(i,'age','Age ({{ K.min_age }}–{{ K.max_age }})',m.age,'number','min="{{ K.min_age }}" max="{{ K.max_age }}"')}${fld(i,'voter','Voter ID',m.voter_id,'text','maxlength="10" placeholder="ABC1234567"')}
+  ${fld(i,'aadhaar4','Aadhaar – last 4 digits',m.aadhaar4,'text','maxlength="4" inputmode="numeric"')}
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">Family member in group?</label><select name="m${i}_family" class="form-select form-select-sm"><option value="">-</option><option value="yes" ${m.family_in_group=='yes'?'selected':''}>Yes</option><option value="no" ${m.family_in_group=='no'?'selected':''}>No</option></select></div>
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">House</label><select name="m${i}_house" class="form-select form-select-sm">${opts(HOUSES,m.house_type,1)}</select></div>
+  ${fld(i,'land','Land (ha)',m.land_ha,'number','step="0.01" min="0"')}${fld(i,'livestock','Livestock',m.livestock)}${fld(i,'income','Annual income (₹)',m.annual_income,'number','min="0"')}${fld(i,'famsize','Family size',m.family_size,'number','min="1"')}
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">Category</label><select name="m${i}_category" class="form-select form-select-sm">${opts(CATS,m.category)}</select></div>
+  ${fld(i,'loan','Loan amount (₹) *',m.loan_amount,'number','min="1"')}${fld(i,'purpose','Purpose *',m.purpose)}
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">Repayment *</label><select name="m${i}_freq" class="form-select form-select-sm">${opts(FREQS,m.frequency,1)}</select></div>
+  ${fld(i,'inst','No. of instalments *',m.instalments,'number','min="1"')}</div>
+  <div class="mt-2 small fw-semibold">Member confirms (all required to submit):</div>
+  <div class="row g-1">${CHECKS.map(c=>`<div class="col-12 col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="m${i}_${c[0]}" id="m${i}${c[0]}" ${m[c[0]]?'checked':''}><label class="form-check-label small" for="m${i}${c[0]}">${esc(c[1])}</label></div></div>`).join('')}</div>`;
+  box.appendChild(d); sync(); return d;
+}
+function sync(){[...box.children].forEach((d,k)=>d.querySelector('.mno').textContent='Member '+(k+1));document.getElementById('rows').value=[...box.children].map(d=>d.dataset.i).join(',')}
+box.addEventListener('click',e=>{if(e.target.classList.contains('rm')){e.target.closest('[data-i]').remove();sync();}});
+const addm=document.getElementById('addm'); if(addm) addm.onclick=()=>add();
+const pk=document.getElementById('pick');
+if(pk) pk.onchange=()=>{const c=PICK[pk.value]; if(!c) return; const used=[...box.querySelectorAll('input[name$="_customer"]')].some(x=>x.value==pk.value);
+  if(used){alert('This customer is already in the group.');pk.value='';return;}
+  add({customer_id:pk.value,name:c.name,husband_name:c.husband,age:c.age,voter_id:c.voter,aadhaar4:c.aadhaar4,house_type:c.house,land_ha:c.land,livestock:c.livestock,annual_income:c.income,category:c.category,family_size:c.famsize}); pk.value='';};
+INIT.forEach(add); if(!INIT.length&&!RO){for(let k=0;k<{{ K.pregrt_min }};k++)add();}
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Group loan application{% endblock %}
+{% block body %}
+<a href="{{ url_for('pregrt_detail', pid=pg['id']) }}" class="small text-decoration-none">&larr; Pre-GRT #{{ pg['id'] }}</a>
+<h4 class="my-2">Group loan application · Centre {{ pg['center_no'] or '-' }} / Group {{ pg['group_no'] or '-' }}</h4>
+<div class="alert alert-info small">One form for the whole group: choose the members who are applying ({{ CFG.group_min|int }}-{{ CFG.group_max|int }}), enter each amount and income. Every member gets her own application, linked to this group, and goes through the normal approval chain.</div>
+<form method="post">
+<div class="card mb-3"><div class="card-body row g-2">
+  <div class="col-12 col-md-6"><label class="form-label small">Group loan product</label><select name="product_id" class="form-select" required><option value="">Choose</option>
+    {% for p in prods %}<option value="{{ p['id'] }}" {{ 'selected' if form.get('product_id')==p['id']|string }}>{{ p['name'] }} · {{ p['rate'] }}% · {{ p['min_amt']|int }}-{{ p['max_amt']|int }} · {{ p['min_tenure'] }}-{{ p['max_tenure'] }} m</option>{% endfor %}</select></div>
+  <div class="col-12 col-md-3"><label class="form-label small">Tenure (months)</label><input name="tenure" value="{{ form.get('tenure','') }}" class="form-control" inputmode="numeric" required></div>
+</div></div>
+<div class="card mb-3"><div class="table-responsive"><table class="table align-middle mb-0 small">
+<thead><tr><th>Apply</th><th>Member</th><th>Amount</th><th>Monthly income</th><th>Monthly expense</th><th>Purpose</th></tr></thead><tbody>
+{% for m in members %}<tr>
+<td>{% if m['problem'] %}<input type="checkbox" disabled>{% else %}<input type="checkbox" name="use_{{ m['id'] }}" value="1" {{ 'checked' if form.get('use_'+m['id']|string) or form.get('use_all') }}>{% endif %}</td>
+<td><b>{{ m['name'] }}</b>{% if m['problem'] %}<div class="text-danger">{{ m['problem'] }}</div>{% endif %}</td>
+{% if not m['problem'] %}
+<td><input name="amt_{{ m['id'] }}" class="form-control form-control-sm" value="{{ form.get('amt_'+m['id']|string, m['loan_amount']|int if m['loan_amount'] else '') }}" inputmode="numeric"></td>
+<td><input name="income_{{ m['id'] }}" class="form-control form-control-sm" value="{{ form.get('income_'+m['id']|string, m['income_default']) }}" inputmode="numeric"></td>
+<td><input name="exp_{{ m['id'] }}" class="form-control form-control-sm" value="{{ form.get('exp_'+m['id']|string, '') }}" inputmode="numeric"></td>
+<td><input name="purpose_{{ m['id'] }}" class="form-control form-control-sm" value="{{ form.get('purpose_'+m['id']|string, m['purpose'] or '') }}" maxlength="60"></td>
+{% else %}<td colspan="4"></td>{% endif %}</tr>{% endfor %}</tbody></table></div></div>
+<div class="card mb-3"><div class="card-body small">
+  <div class="mb-2"><b>Documents deposited (at least two)</b><br>{% for k,l in docs %}<label class="me-3"><input type="checkbox" name="docs_dep" value="{{ k }}" {{ 'checked' if form.getlist is defined and k in form.getlist('docs_dep') }}> {{ l }}</label>{% endfor %}</div>
+  <div class="row g-2 mb-2"><div class="col-12 col-md-4"><label class="form-label small mb-0">Life insurance wanted?</label><select name="insurance_wanted" class="form-select form-select-sm"><option value="no" {{ 'selected' if form.get('insurance_wanted')!='yes' }}>No</option><option value="yes" {{ 'selected' if form.get('insurance_wanted')=='yes' }}>Yes</option></select></div>
+  <div class="col-12 col-md-4"><label class="form-label small mb-0">Insurance for</label><select name="insurance_for" class="form-select form-select-sm"><option value="">-</option>{% for v,l in [('husband','Husband'),('self','Self'),('both','Both')] %}<option value="{{ v }}" {{ 'selected' if form.get('insurance_for')==v }}>{{ l }}</option>{% endfor %}</select></div></div>
+  <label class="d-block"><input type="checkbox" name="insurance_ack" value="1"> Insurance acknowledgement (needed if insurance is wanted)</label>
+  <label class="d-block"><input type="checkbox" name="app_declaration" value="1"> The group declares that the details given are true and every member knows the loan terms.</label>
+</div></div>
+<button class="btn btn-primary">Submit group application</button>
+</form>
+{% endblock %}

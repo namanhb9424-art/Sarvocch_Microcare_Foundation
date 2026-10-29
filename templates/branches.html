@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Branches{% endblock %}
+{% block body %}
+<h4 class="mb-1">Branches <small class="text-muted fs-6">admin only</small></h4>
+<p class="small text-muted">Each branch has a GPS location. Staff can punch out only within the allowed distance of their branch (default 2 km). Add new branches here and they appear in every branch list.</p>
+<div class="card mb-3"><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+<thead><tr><th>Name</th><th>Code</th><th>Address / phone / head</th><th>Location (lat, lng)</th><th>Distance (m)</th><th>Active</th><th>Staff / customers</th><th></th></tr></thead>
+<tbody>{% for b in rows %}<tr>
+ <td><input form="bf{{ b['id'] }}" name="name" value="{{ b['name'] }}" class="form-control form-control-sm" style="min-width:150px" required></td>
+ <td><input form="bf{{ b['id'] }}" name="code" value="{{ b['code'] or '' }}" class="form-control form-control-sm" style="width:80px"></td>
+ <td style="min-width:200px"><input form="bf{{ b['id'] }}" name="address" value="{{ b['address'] or '' }}" class="form-control form-control-sm mb-1" placeholder="Address">
+   <div class="d-flex gap-1"><input form="bf{{ b['id'] }}" name="phone" value="{{ b['phone'] or '' }}" class="form-control form-control-sm" placeholder="Phone"><input form="bf{{ b['id'] }}" name="head_name" value="{{ b['head_name'] or '' }}" class="form-control form-control-sm" placeholder="Branch head"></div></td>
+ <td style="min-width:190px"><input form="bf{{ b['id'] }}" name="location" value="{{ b['lat'] }}, {{ b['lng'] }}" class="form-control form-control-sm">
+   <a class="small" target="_blank" href="https://www.google.com/maps?q={{ b['lat'] }},{{ b['lng'] }}&z=17">View on map</a></td>
+ <td><input form="bf{{ b['id'] }}" name="radius_m" type="number" min="50" max="20000" value="{{ b['radius_m'] }}" class="form-control form-control-sm" style="width:85px"></td>
+ <td><input form="bf{{ b['id'] }}" type="checkbox" name="active" {{ 'checked' if b['active'] }}></td>
+ <td class="small">{{ b['staff'] }} / {{ b['customers'] }}</td>
+ <td><button form="bf{{ b['id'] }}" class="btn btn-sm btn-outline-primary">Save</button></td></tr>{% endfor %}</tbody></table></div></div>
+{% for b in rows %}<form id="bf{{ b['id'] }}" method="post"><input type="hidden" name="id" value="{{ b['id'] }}"></form>{% endfor %}
+<div class="card"><div class="card-header">Add a branch</div><form method="post" class="card-body row g-2">
+ <div class="col-12 col-md-3"><label class="form-label small mb-0">Branch name *</label><input name="name" class="form-control" required></div>
+ <div class="col-6 col-md-2"><label class="form-label small mb-0">Code</label><input name="code" class="form-control"></div>
+ <div class="col-12 col-md-4"><label class="form-label small mb-0">Address</label><input name="address" class="form-control"></div>
+ <div class="col-6 col-md-3"><label class="form-label small mb-0">Phone</label><input name="phone" class="form-control"></div>
+ <div class="col-12 col-md-3"><label class="form-label small mb-0">Branch head</label><input name="head_name" class="form-control"></div>
+ <div class="col-12 col-md-5"><label class="form-label small mb-0">Location * (paste a Google Maps link or "latitude, longitude")</label><input name="location" class="form-control" placeholder="https://www.google.com/maps?q=23.27993,77.45220  or  23.27993, 77.45220" required></div>
+ <div class="col-6 col-md-2"><label class="form-label small mb-0">Allowed distance (m)</label><input name="radius_m" type="number" min="50" max="20000" value="2000" class="form-control"></div>
+ <div class="col-12"><button class="btn btn-primary">Add branch</button></div>
+</form></div>
+<p class="small text-muted mt-2">Renaming a branch updates all staff, customer, loan and group records. Switching a branch off hides it from new entries; old records are kept.</p>
+{% endblock %}

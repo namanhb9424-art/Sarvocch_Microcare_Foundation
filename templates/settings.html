@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Settings{% endblock %}
+{% block body %}
+<h4 class="mb-3">Settings <small class="text-muted fs-6">admin only</small></h4>
+<div class="row g-3">
+ <div class="col-12 col-lg-6"><div class="card"><div class="card-header">Business rules</div>
+  <form method="post" class="card-body"><input type="hidden" name="action" value="save">
+   {% for key,label,default,kind in defs %}<div class="mb-2"><label class="form-label small mb-0" for="s_{{ key }}">{{ label }}</label>
+     <input id="s_{{ key }}" name="{{ key }}" type="number" step="{{ '1' if kind=='int' else '0.01' }}" min="0" value="{{ cfg[key] }}" class="form-control form-control-sm"></div>{% endfor %}
+   <button class="btn btn-primary mt-2">Save settings</button>
+   <div class="form-text mt-2">Changes apply to new forms straight away. For a demo of punch-out, set the minimum hours to a small value such as 0.01.</div>
+  </form></div></div>
+ <div class="col-12 col-lg-6"><div class="card"><div class="card-header">Public holidays (EMI dates skip these, Saturdays and Sundays)</div>
+  <div class="table-responsive" style="max-height:340px"><table class="table table-sm mb-0"><tbody>
+   {% for h in holidays %}<tr><td>{{ h['day']|dt }}</td><td>{{ h['name'] }}</td><td class="text-end"><form method="post" class="d-inline"><input type="hidden" name="action" value="del_holiday"><input type="hidden" name="day" value="{{ h['day'] }}"><button class="btn btn-sm btn-outline-danger py-0">Remove</button></form></td></tr>
+   {% else %}<tr><td class="text-muted">No holidays added yet</td></tr>{% endfor %}</tbody></table></div>
+  <form method="post" class="card-body border-top row g-2"><input type="hidden" name="action" value="add_holiday">
+   <div class="col-5"><input type="date" name="day" class="form-control form-control-sm" required></div>
+   <div class="col-7"><input name="name" class="form-control form-control-sm" placeholder="Holiday name" required></div>
+   <div class="col-12"><button class="btn btn-sm btn-primary">Add holiday</button></div></form>
+  <div class="card-footer small text-muted">Loans already disbursed keep their dates. New loans use this list.</div></div></div>
+</div>
+{% endblock %}

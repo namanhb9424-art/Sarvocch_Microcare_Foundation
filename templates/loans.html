@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import filters %}
+{% block title %}Loans{% endblock %}
+{% block body %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h4 class="mb-0">Loans & EMI</h4>
+<form method="post" action="{{ url_for('autopay_run') }}"><button class="btn btn-outline-primary btn-sm" title="Demo: simulates the bank's monthly mandate debit"><i class="bi bi-lightning-charge"></i> Run AutoPay cycle (demo)</button></form></div>
+{{ filters(f, agents) }}
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+<thead><tr><th>Loan</th><th>Customer</th><th>Principal</th><th>EMI</th><th>Rate</th><th>Tenure</th><th>Branch / Agent</th><th>Status</th><th>AutoPay</th></tr></thead>
+<tbody>{% for l in rows %}<tr onclick="location='{{ url_for('loan_detail', lid=l['id']) }}'" style="cursor:pointer">
+<td>#{{ l['id'] }}</td><td class="fw-semibold">{{ l['cname'] }}</td><td>{{ l['principal']|inr }}</td><td>{{ l['emi']|inr }}</td><td>{{ l['rate'] }}%</td><td>{{ l['tenure'] }} m</td>
+<td class="small">{{ l['branch'] }}<br>{{ l['agent_name'] }}</td>
+<td><span class="badge text-bg-{{ 'success' if l['status']=='active' else 'secondary' }}">{{ l['status'] }}</span>{% if l['overdue'] %} <span class="badge text-bg-danger">{{ l['overdue'] }} overdue</span>{% endif %}</td>
+<td>{% if l['mandate'] %}<i class="bi bi-check-circle-fill text-success"></i> on{% else %}<span class="text-muted">-</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="9" class="text-center text-muted py-4">No loans</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

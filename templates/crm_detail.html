@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}{{ c['name'] }}{% endblock %}
+{% block body %}
+<a href="{{ url_for('crm') }}" class="small text-decoration-none">&larr; CRM</a>
+<div class="d-flex flex-wrap justify-content-between align-items-center my-2 gap-2">
+  <h4 class="mb-0">{{ c['name'] }}</h4>
+  <div class="d-flex gap-2">
+    <form method="post" action="{{ url_for('crm_stage', cid=c['id']) }}" class="d-flex gap-1">
+      <select name="stage" class="form-select form-select-sm">{% for s in ['lead','prospect','customer','closed'] %}<option {{ 'selected' if c['stage']==s }}>{{ s }}</option>{% endfor %}</select>
+      <button class="btn btn-sm btn-outline-secondary">Move</button></form>
+    {% if can('disburse') %}<form method="post" action="{{ url_for('customer_login_create', cid=c['id']) }}" onsubmit="return confirm('Create or reset this customer\'s online login? The old password will stop working.')"><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-key"></i> {{ 'Reset customer login' if has_login else 'Create customer login' }}</button></form>{% endif %}
+    {% if can('apply') %}<a class="btn btn-sm btn-primary" href="{{ url_for('apply', customer_id=c['id']) }}">New application</a>{% endif %}
+  </div>
+</div>
+<div class="row g-3">
+  <div class="col-12 col-lg-4"><div class="card h-100"><div class="card-header">Profile (lifecycle: {{ c['stage'] }})</div><div class="card-body small">
+    <div><b>Phone:</b> {{ c['phone'] }} {% if c['wa_verified'] %}<span class="badge text-bg-success"><i class="bi bi-whatsapp"></i> verified</span>{% endif %}</div>
+    <div><b>DOB:</b> {{ c['dob']|dt }}</div><div><b>Address:</b> {{ c['address'] }}</div><div><b>Branch:</b> {{ c['branch'] }}</div><div><b>Agent:</b> {{ c['agent_name'] or '-' }}</div>
+    <hr><div><b>KYC:</b> {{ c['kyc_status'] }}</div><div>Aadhaar: {{ c['aadhaar'] or '-' }}</div><div>PAN: {{ c['pan'] or '-' }}</div><div>Voter ID: {{ c['voter'] or '-' }}</div>
+    {% if can('kyc') %}<a href="{{ url_for('kyc') }}" class="btn btn-sm btn-outline-primary mt-2">Verify KYC</a>{% endif %}
+    <hr><div><b>KYC form:</b> {% if kycf %}<span class="badge text-bg-success">completed</span> {{ kycf['updated_at'][:10] }}{% else %}<span class="badge text-bg-warning">not filled</span>{% endif %}</div>
+    {% if kycf and kycf['photo'] %}<img src="{{ url_for('uploaded', name=kycf['photo']) }}" class="rounded border my-2" style="width:80px;height:96px;object-fit:cover" alt="photo">{% endif %}
+    <div class="d-flex flex-wrap gap-1 mt-1">{% if can('kycform') %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('kyc_form_edit', cid=c['id']) }}">{{ 'Edit KYC form' if kycf else 'Fill KYC form' }}</a>{% endif %}
+    {% if kycf %}<a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ url_for('kyc_form_print', cid=c['id']) }}"><i class="bi bi-printer"></i> Print</a>{% endif %}</div>
+  </div></div></div>
+  <div class="col-12 col-lg-8">
+    <div class="card mb-3"><div class="card-header">Applications & loans</div><div class="table-responsive"><table class="table table-sm mb-0">
+      <thead><tr><th>#</th><th>Product</th><th>Amount</th><th>Status</th></tr></thead>
+      <tbody>{% for a in apps %}<tr><td><a href="{{ url_for('application_detail', aid=a['id']) }}">#{{ a['id'] }}</a></td><td>{{ a['pname'] }}</td><td>{{ a['amount']|inr }}</td><td>{{ a['status'].replace('_',' ') }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">None</td></tr>{% endfor %}</tbody></table>
+      {% for l in loans %}<div class="p-2 border-top small">Loan <a href="{{ url_for('loan_detail', lid=l['id']) }}">#{{ l['id'] }}</a> · {{ l['principal']|inr }} · {{ l['status'] }}</div>{% endfor %}</div></div>
+    <div class="card"><div class="card-header">Communication log</div><div class="card-body">
+      <form method="post" action="{{ url_for('crm_log', cid=c['id']) }}" class="row g-2 mb-3">
+        <div class="col-4 col-md-2"><select name="channel" id="chsel" class="form-select form-select-sm"><option>call</option><option>visit</option><option>whatsapp</option><option>sms</option><option>email</option></select></div>
+        <div class="col-8 col-md-8"><input name="note" class="form-control form-control-sm" placeholder="What was discussed?" required></div>
+        <div class="col-12 col-md-2"><button class="btn btn-sm btn-primary w-100">Log</button></div>
+        <div class="col-6 col-md-3 callf"><select name="call_dir" class="form-select form-select-sm"><option value="outgoing">Outgoing call</option><option value="incoming">Incoming call</option></select></div>
+        <div class="col-6 col-md-3 callf"><select name="outcome" class="form-select form-select-sm">{% for o in K.call_outcomes %}<option>{{ o }}</option>{% endfor %}</select></div>
+        <div class="col-6 col-md-3 callf"><input name="duration_min" type="number" min="0" max="600" class="form-control form-control-sm" placeholder="Duration (minutes)"></div>
+        <div class="col-6 col-md-3"><input name="follow_up" type="date" min="{{ today }}" class="form-control form-control-sm" title="Follow-up date (optional)"></div></form>
+      <script>(function(){const s=document.getElementById('chsel');function t(){document.querySelectorAll('.callf').forEach(e=>e.classList.toggle('d-none',s.value!=='call'));}s.addEventListener('change',t);t();})();</script>
+      {% for l in logs %}<div class="border-start border-3 border-info ps-2 mb-2 small"><b>{{ l['channel'] }}</b>{% if l['channel']=='call' and l['call_dir'] %} ({{ l['call_dir'] }}, {{ l['outcome'] }}{% if l['duration_min'] is not none %}, {{ l['duration_min'] }} min{% endif %}){% endif %} · {{ l['at'][:16].replace('T',' ') }} · {{ l['by_name'] }}<br>{{ l['note'] }}{% if l['follow_up'] %}<br><span class="badge text-bg-warning">Follow up on {{ l['follow_up']|dt }}</span>{% endif %}</div>{% else %}<span class="text-muted small">No communication yet</span>{% endfor %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

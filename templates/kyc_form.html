@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+{% block title %}KYC Form{% endblock %}
+
+{# ---------- small helpers so the long form stays readable ---------- #}
+{% macro inp(name, label, type='text', req=False, cols='col-12 col-md-4', attrs='', hint='') -%}
+<div class="{{ cols }}"><label class="form-label small mb-1" for="f_{{ name }}">{{ label }}{% if req %} <span class="text-danger">*</span>{% endif %}</label>
+  <input class="form-control" id="f_{{ name }}" type="{{ type }}" name="{{ name }}" value="{{ v.get(name, '') }}" {{ 'required' if req }} {{ attrs|safe }}>
+  {% if hint %}<div class="form-text">{{ hint }}</div>{% endif %}</div>
+{%- endmacro %}
+{% macro sel(name, label, options, req=False, cols='col-6 col-md-4') -%}
+<div class="{{ cols }}"><label class="form-label small mb-1" for="f_{{ name }}">{{ label }}{% if req %} <span class="text-danger">*</span>{% endif %}</label>
+  <select class="form-select" id="f_{{ name }}" name="{{ name }}" {{ 'required' if req }}><option value="">Select…</option>
+  {% for o in options %}{% set val = o if o is string else o[0] %}{% set txt = o if o is string else o[1] %}<option value="{{ val }}" {{ 'selected' if v.get(name) == val }}>{{ txt }}</option>{% endfor %}</select></div>
+{%- endmacro %}
+{% macro radios(name, label, options, cols='col-12 col-md-6') -%}
+<div class="{{ cols }}"><div class="form-label small mb-1">{{ label }} <span class="text-danger">*</span></div>
+  {% for val, txt in options %}<div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="{{ name }}" id="{{ name }}_{{ val }}" value="{{ val }}" {{ 'checked' if v.get(name) == val }}>
+  <label class="form-check-label" for="{{ name }}_{{ val }}">{{ txt }}</label></div>{% endfor %}</div>
+{%- endmacro %}
+
+{% block body %}
+{% set editing = cust is not none %}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-2 gap-2">
+  <div>
+    <h4 class="mb-0">{{ 'KYC Form' if editing else 'New Customer · KYC Form' }}</h4>
+    <div class="text-muted small">अपने ग्राहक को जानें (मूल विवरण प्रपत्र) · fill this at the very first visit. Fields marked <span class="text-danger">*</span> are required.</div>
+  </div>
+  <div class="d-flex gap-2">
+    {% if editing and existing %}<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('kyc_form_print', cid=cust['id']) }}"><i class="bi bi-printer"></i> Print view</a>{% endif %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('crm_detail', cid=cust['id']) if editing else url_for('crm') }}">Cancel</a>
+  </div>
+</div>
+{% if editing %}<div class="alert alert-light border small py-2">Customer ID <b>{{ cust_code(cust['id']) }}</b> · currently <b>{{ cust['stage'] }}</b>{% if existing %} · last saved {{ existing['updated_at'][:16].replace('T',' ') }}{% else %} · <span class="text-warning-emphasis">KYC form not filled yet</span>{% endif %}</div>{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="row g-3" id="kycForm" autocomplete="off">
+
+  <div class="col-12"><div class="card"><div class="card-header">Form details / प्रपत्र विवरण</div><div class="card-body row g-2">
+    {{ inp('form_date', 'Date / दिनांक', 'date', True, 'col-6 col-md-3', 'max="' ~ today ~ '"') }}
+    {{ sel('branch', 'Branch / शाखा', BRANCHES, True, 'col-6 col-md-3') }}
+    {{ inp('center_no', 'Centre no. / केन्द्र संख्या', 'text', False, 'col-6 col-md-3', 'maxlength="20"') }}
+    {{ inp('group_no', 'Group no. / समूह संख्या', 'text', False, 'col-6 col-md-3', 'maxlength="20"') }}
+    {% if g.user['role'] != 'field_agent' %}
+    <div class="col-12 col-md-4"><label class="form-label small mb-1" for="f_agent_id">Field officer (S.O.) / एस.ओ. <span class="text-danger">*</span></label>
+      <select class="form-select" id="f_agent_id" name="agent_id" required><option value="">Select…</option>
+      {% for a in agents %}<option value="{{ a['id'] }}" {{ 'selected' if v.get('agent_id')|string == a['id']|string }}>{{ a['name'] }}</option>{% endfor %}</select></div>
+    {% endif %}
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">A · Applicant / आवेदनकर्ता का विवरण</div><div class="card-body row g-2">
+    {{ inp('name', "Applicant's name / आवेदनकर्ता का नाम", 'text', True, 'col-12 col-md-5', 'maxlength="80"') }}
+    {{ inp('phone', 'Mobile no. / मोबाइल नं.', 'tel', True, 'col-6 col-md-3', 'inputmode="numeric" pattern="[6-9][0-9]{9}" maxlength="10"', '10 digits') }}
+    <div class="col-6 col-md-4"><label class="form-label small mb-1" for="f_dob">Date of birth / जन्म तिथि <span class="text-danger">*</span></label>
+      <input class="form-control" type="date" id="f_dob" name="dob" value="{{ v.get('dob','') }}" required max="{{ today }}">
+      <div class="form-text">Age: <b id="ageOut">-</b> (allowed {{ K.min_age }}-{{ K.max_age }}). This date is also the sanction-letter password.</div></div>
+    {{ radios('guardian_type', 'Name below is of the / नीचे का नाम', [('husband', 'Husband / पति'), ('father', 'Father / पिता')], 'col-12 col-md-4') }}
+    {{ inp('guardian_name', 'Husband / father name / पति/पिता का नाम', 'text', True, 'col-12 col-md-4', 'maxlength="80"') }}
+    {{ sel('education', 'Educational qualification / शैक्षिक योग्यता', K.education, True, 'col-6 col-md-4') }}
+    {{ sel('religion', 'Religion / धर्म', K.religions, True, 'col-6 col-md-3') }}
+    {{ sel('category', 'Category / वर्ग', K.categories, True, 'col-6 col-md-3') }}
+    <div class="col-12 col-md-6"><label class="form-label small mb-1" for="f_photo">Applicant photo / फोटो {% if not (existing and existing['photo']) %}<span class="text-danger">*</span>{% endif %}</label>
+      <div class="d-flex gap-3 align-items-center">
+        <img id="photoPrev" class="rounded border" style="width:84px;height:100px;object-fit:cover;background:#f1f3f5" alt="" {% if existing and existing['photo'] %}src="{{ url_for('uploaded', name=existing['photo']) }}"{% endif %}>
+        <input class="form-control" id="f_photo" type="file" name="photo" accept="image/jpeg,image/png" capture="user"></div>
+      <div class="form-text">JPG or PNG. On a phone this opens the camera.</div></div>
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">Address / पता</div><div class="card-body row g-2">
+    {{ inp('house_no', 'House no. / मकान संख्या', 'text', False, 'col-6 col-md-2', 'maxlength="40"') }}
+    {{ inp('village', 'Village / town / ग्राम / नगर', 'text', True, 'col-6 col-md-3', 'maxlength="60"') }}
+    {{ inp('post_office', 'Post office / पोस्ट', 'text', False, 'col-6 col-md-2', 'maxlength="60"') }}
+    {{ inp('district', 'District / जिला', 'text', True, 'col-6 col-md-2', 'maxlength="60"') }}
+    {{ sel('state', 'State / राज्य', K.states, True, 'col-8 col-md-3') }}
+    {{ inp('pincode', 'PIN code / पिन कोड', 'text', True, 'col-4 col-md-2', 'inputmode="numeric" pattern="[1-9][0-9]{5}" maxlength="6"') }}
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header d-flex justify-content-between align-items-center">B · Family members / परिवार के सदस्य
+      <button type="button" class="btn btn-sm btn-outline-primary" id="addFam"><i class="bi bi-plus-lg"></i> Add member</button></div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0" id="famTable">
+      <thead><tr><th style="width:34px">#</th><th>Name / नाम</th><th style="width:90px">Age / उम्र</th><th>Education / शैक्षिक योग्यता</th><th>Relation / संबंध</th><th>Occupation / व्यवसाय</th><th style="width:40px"></th></tr></thead>
+      <tbody></tbody></table></div>
+    <div class="card-footer small text-muted">List the applicant first, then everyone who lives in the household (maximum 12).</div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">C · House, assets & bank / मकान, संपत्ति एवं बैंक</div><div class="card-body row g-2">
+    {{ radios('house_type', 'Type of house / मकान का प्रकार', K.house_types, 'col-12 col-md-8') }}
+    {{ inp('land_ha', 'Land (hectare) / जमीन (हेक्टेयर)', 'number', False, 'col-6 col-md-2', 'min="0" step="0.01"') }}
+    {{ inp('livestock', 'Livestock / पशुधन', 'text', False, 'col-6 col-md-2', 'maxlength="60" placeholder="e.g. 2 cows"') }}
+    {{ inp('bank_name', 'Bank name / बैंक का नाम', 'text', False, 'col-12 col-md-3', 'maxlength="60"') }}
+    {{ inp('bank_acct', 'Bank account no. / बैंक खाता नं.', 'text', False, 'col-12 col-md-3', 'inputmode="numeric" pattern="[0-9 ]{9,22}" maxlength="22"', '9-18 digits') }}
+    {{ inp('passbook_name', 'Name in passbook / पासबुक में सदस्य का नाम', 'text', False, 'col-12 col-md-3', 'maxlength="80"') }}
+    {{ radios('poverty_line', 'Poverty line / गरीबी रेखा', [('BPL', 'BPL'), ('APL', 'APL')], 'col-12 col-md-3') }}
+    {{ inp('dist_center_m', 'Distance from centre meeting place (m) / केन्द्र बैठक की जगह से दूरी (मी.)', 'number', False, 'col-6 col-md-4', 'min="0" step="1"') }}
+    {{ inp('dist_branch_km', 'Distance from branch (km) / शाखा से दूरी (कि.मी.)', 'number', False, 'col-6 col-md-3', 'min="0" step="0.1"') }}
+    {{ radios('relative_in_center', 'Any relative in the centre? / केन्द्र में कोई संबंधी?', [('yes', 'Yes / हाँ'), ('no', 'No / नहीं')], 'col-12 col-md-3') }}
+    {{ inp('relative_name', "Relative's name / संबंधी का नाम", 'text', False, 'col-12 col-md-4', 'maxlength="80"') }}
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">D · Customer financial information / ग्राहक वित्तीय जानकारी</div><div class="card-body row g-2">
+    {{ inp('annual_income', 'Annual household income (₹) / वार्षिक पारिवारिक आय (रु.)', 'number', True, 'col-12 col-md-3', 'min="0" step="1"') }}
+    {{ inp('other_loans', 'Other MFI / SHG loans (number) / अन्य MFI/SHG ऋण संख्या', 'number', False, 'col-6 col-md-3', 'min="0" max="50" step="1"') }}
+    {{ inp('current_debt', 'Current indebtedness (₹) / वर्तमान ऋणग्रस्तता (रु.)', 'number', False, 'col-6 col-md-3', 'min="0" step="1"') }}
+    {{ radios('repay_freq', 'Repayment frequency / भुगतान के संदर्भ में', K.freqs, 'col-12 col-md-3') }}
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">E · Co-applicant (optional) / सह-आवेदक (वैकल्पिक)</div><div class="card-body row g-2">
+    <div class="col-12 small text-muted">Someone from the family who also stands responsible for the loan. Leave empty if there is none.</div>
+    {{ inp('co_name','Name / नाम') }}
+    {{ inp('co_phone','Mobile / मोबाइल','tel',attrs='pattern="[6-9][0-9]{9}" maxlength="10" inputmode="numeric"') }}
+    <div class="col-12 col-md-4"><label class="form-label small mb-1" for="f_co_relation">Relation with applicant / संबंध</label>
+      <select class="form-select" id="f_co_relation" name="co_relation"><option value="">Select…</option>{% for r in K.co_relations %}<option value="{{ r }}" {{ 'selected' if v.get('co_relation')==r }}>{{ r }}</option>{% endfor %}</select></div>
+    <div class="col-12 col-md-4" id="coOtherBox"><label class="form-label small mb-1" for="f_co_relation_other">If Other, write the relation</label>
+      <input class="form-control" id="f_co_relation_other" name="co_relation_other" maxlength="40" value="{{ v.get('co_relation_other','') }}"></div>
+    {{ inp('co_income','Monthly income (₹) / मासिक आय','number',attrs='min="0"') }}
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">F · Neighbour details (optional) / पड़ोसी का विवरण (वैकल्पिक)</div><div class="card-body">
+    <div class="small text-muted mb-2">Two or three neighbours who know the applicant. The branch will call them for feedback before the loan is approved. Email is optional.</div>
+    {% set nbs = v.get('neigh') or [] %}
+    {% for i in range([nbs|length, 2]|max) %}{% set n = nbs[i] if i < nbs|length else {} %}
+    <div class="row g-2 mb-2 border-bottom pb-2"><div class="col-12 small fw-semibold">Neighbour {{ loop.index }}</div>
+      <div class="col-12 col-md-3"><input class="form-control" name="nb_name" placeholder="Name / नाम" value="{{ n.get('name','') }}"></div>
+      <div class="col-6 col-md-2"><input class="form-control" name="nb_phone" placeholder="Mobile / मोबाइल" maxlength="10" inputmode="numeric" value="{{ n.get('phone','') }}"></div>
+      <div class="col-6 col-md-3"><input class="form-control" name="nb_email" type="email" placeholder="Email (optional)" value="{{ n.get('email','') }}"></div>
+      <div class="col-4 col-md-1"><input class="form-control" name="nb_years" type="number" min="0" max="100" placeholder="Yrs known" value="{{ n.get('years','') if n.get('years') is not none else '' }}"></div>
+      <div class="col-8 col-md-3"><input class="form-control" name="nb_remarks" maxlength="200" placeholder="Remarks (optional)" value="{{ n.get('remarks','') }}"></div></div>
+    {% endfor %}
+  </div></div></div>
+  <div class="col-12" id="husbandBox"><div class="card border-warning"><div class="card-header">G · Husband's information & consent for loan / पति की जानकारी एवं ऋण की सहमति</div><div class="card-body row g-2">
+    <div class="col-12 col-md-4"><label class="form-label small mb-1">Husband's name / पति का नाम</label><input class="form-control" id="hNameShow" readonly tabindex="-1"><div class="form-text">Copied from the name given above.</div></div>
+    {{ inp('h_father', "Husband's father's name / पिता का नाम", 'text', False, 'col-12 col-md-4', 'maxlength="80"') }}
+    <div class="col-6 col-md-4"><label class="form-label small mb-1" for="f_h_dob">Date of birth / जन्म तिथि <span class="text-danger">*</span></label>
+      <input class="form-control" type="date" id="f_h_dob" name="h_dob" value="{{ v.get('h_dob','') }}" max="{{ today }}"><div class="form-text">Age: <b id="hAgeOut">-</b></div></div>
+    <div class="col-12 col-md-8"><label class="form-label small mb-1" for="f_h_address">Address / पता <span class="text-danger">*</span></label>
+      <textarea class="form-control" id="f_h_address" name="h_address" rows="2" maxlength="200">{{ v.get('h_address','') }}</textarea>
+      <div class="form-check mt-1"><input class="form-check-input" type="checkbox" name="h_same_addr" id="hSame" {{ 'checked' if v.get('h_same_addr') }}><label class="form-check-label small" for="hSame">Same as the applicant's address</label></div></div>
+    <div class="col-12 col-md-4"><label class="form-label small mb-1" for="f_h_photo">Husband's photo / फोटो</label>
+      <div class="d-flex gap-2 align-items-center"><img id="hPhotoPrev" class="rounded border" style="width:56px;height:68px;object-fit:cover;background:#f1f3f5" alt="" {% if existing and existing['h_photo'] %}src="{{ url_for('uploaded', name=existing['h_photo']) }}"{% endif %}>
+      <input class="form-control" id="f_h_photo" type="file" name="h_photo" accept="image/jpeg,image/png"></div></div>
+    <div class="col-12"><div class="p-3 rounded bg-light border small">
+      <div class="fw-semibold mb-1">Consent for loan / ऋण की सहमति</div>
+      <p class="mb-1">I, <b class="hn">the husband</b>, certify that <b class="an">the applicant</b> is my wife. For the business growth of our family I give my consent for her to take a loan from <b>Sarvocch Microcare Foundation</b>. I will make sure she attends centre meetings on time, and I will be responsible and a partner in repaying this loan.</p>
+      <p class="mb-2 text-muted">मैं, <b class="hn">पति</b>, प्रमाणित करता हूँ कि श्रीमती <b class="an">आवेदक</b> मेरी पत्नी हैं। मैं अपने परिवार की व्यावसायिक वृद्धि के लिए उन्हें सर्वोच्च माइक्रोकेयर फाउंडेशन से ऋण लेने की सहमति देता हूँ। मैं उनके केन्द्र बैठक में समय से जाने तथा समय से ऋण अदायगी के लिए जिम्मेदार रहूँगा तथा इस ऋण की अदायगी में सहभागीदार रहूँगा।</p>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="consent_given" id="consent" {{ 'checked' if v.get('consent_given') }}>
+        <label class="form-check-label fw-semibold" for="consent">The husband has read / heard this and agrees. <span class="text-danger">*</span></label></div>
+      {% if existing and existing['consent_date'] %}<div class="text-muted mt-1">Consent recorded on {{ existing['consent_date']|dt }}.</div>{% endif %}
+    </div></div>
+  </div></div></div>
+
+  <div class="col-12"><div class="card"><div class="card-header">H · Declaration & KYC verification / घोषणा एवं केवाईसी पुष्टीकरण</div><div class="card-body">
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="declaration" id="decl" {{ 'checked' if v.get('declaration') }}>
+      <label class="form-check-label" for="decl">I declare that all the information given in this form is complete and correct. / मैं घोषणा करता/करती हूँ कि इस प्रपत्र में दी गई सभी जानकारी पूर्णतया सही है। <span class="text-danger">*</span></label></div>
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="bureau_consent" id="bureau" {{ 'checked' if v.get('bureau_consent') }}>
+      <label class="form-check-label" for="bureau">I agree that my credit information may be shared with credit bureaus and insurance companies. / मैं अपनी जानकारी क्रेडिट ब्यूरो एवं बीमा कंपनी के साथ साझा करने की सहमति देता/देती हूँ। <span class="text-danger">*</span></label></div>
+    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="address_verified" id="addrv" {{ 'checked' if v.get('address_verified') }}>
+      <label class="form-check-label" for="addrv"><b>Field officer:</b> I visited the applicant's home, verified the address and the details above, and found them true. / मैंने आवेदक के निवास पर जाकर पता एवं उपर्युक्त जानकारी का सत्यापन किया है। <span class="text-danger">*</span></label></div>
+    <div class="row g-2">
+      <div class="col-12 col-md-4"><label class="form-label small mb-1">Verified by / सत्यापनकर्ता</label><input class="form-control" value="{{ g.user['name'] }} · {{ today|dt }}" readonly tabindex="-1"></div>
+      {{ inp('verify_remarks', 'Remarks (optional)', 'text', False, 'col-12 col-md-4', 'maxlength="300"') }}
+      <div class="col-12 col-md-4"><label class="form-label small mb-1" for="f_signed_copy">Scan / photo of the signed paper form (optional)</label>
+        <input class="form-control" id="f_signed_copy" type="file" name="signed_copy" accept=".pdf,image/jpeg,image/png">
+        {% if existing and existing['signed_copy'] %}<div class="form-text">Already uploaded: <a target="_blank" href="{{ url_for('uploaded', name=existing['signed_copy']) }}">view</a>. Choose a file to replace it.</div>{% endif %}</div>
+    </div>
+    <div class="small text-muted mt-2"><i class="bi bi-info-circle"></i> Keep copies of the ration card and a valid ID with the paper form. Aadhaar / PAN / Voter ID numbers are verified separately in <b>KYC Verify</b>.</div>
+  </div></div></div>
+
+  <div class="col-12 d-flex gap-2 pb-4">
+    <button class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Save KYC form</button>
+    <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('crm_detail', cid=cust['id']) if editing else url_for('crm') }}">Cancel</a>
+  </div>
+</form>
+<datalist id="relList">{% for r in ['Self','Husband','Wife','Son','Daughter','Father','Mother','Brother','Sister','Daughter-in-law','Son-in-law','Other'] %}<option value="{{ r }}">{% endfor %}</datalist>
+<datalist id="eduList">{% for e in K.education %}<option value="{{ e }}">{% endfor %}<option value="Class 1-4"><option value="Class 5-8"><option value="Not applicable (child)"></datalist>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const FAMILY = {{ family|tojson }};
+const tbody = $('#famTable tbody');
+
+function ageFrom(iso) { if (!iso) return null; const d = new Date(iso), t = new Date(); if (isNaN(d)) return null;
+  let a = t.getFullYear() - d.getFullYear(); const m = t.getMonth() - d.getMonth(); if (m < 0 || (m === 0 && t.getDate() < d.getDate())) a--; return a; }
+function renumber() { $$('tr', tbody).forEach((tr, i) => tr.querySelector('.sn').textContent = i + 1); $('#addFam').disabled = $$('tr', tbody).length >= 12; }
+function addRow(r = {}) {
+  if ($$('tr', tbody).length >= 12) return;
+  const tr = document.createElement('tr');
+  const val = k => (r[k] ?? '').toString().replace(/"/g, '&quot;');
+  tr.innerHTML = `<td class="sn text-muted"></td>
+    <td><input class="form-control form-control-sm" name="fm_name" value="${val('name')}" maxlength="80" placeholder="Full name"></td>
+    <td><input class="form-control form-control-sm" name="fm_age" type="number" min="0" max="110" value="${val('age')}" inputmode="numeric"></td>
+    <td><input class="form-control form-control-sm" name="fm_edu" list="eduList" value="${val('edu')}" maxlength="40"></td>
+    <td><input class="form-control form-control-sm" name="fm_rel" list="relList" value="${val('rel')}" maxlength="30"></td>
+    <td><input class="form-control form-control-sm" name="fm_occ" value="${val('occ')}" maxlength="40"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0" title="Remove">&times;</button></td>`;
+  tr.querySelector('button').onclick = () => { tr.remove(); renumber(); };
+  tbody.appendChild(tr); renumber();
+}
+(FAMILY.length ? FAMILY : [{ rel: 'Self', name: $('#f_name').value, age: ageFrom($('#f_dob').value) ?? '' }]).forEach(addRow);
+$('#addFam').onclick = () => addRow();
+
+function sync() {
+  const age = ageFrom($('#f_dob').value); $('#ageOut').textContent = age === null ? '-' : age;
+  const first = tbody.querySelector('tr');   // keep the "Self" row in step with the applicant
+  if (first && first.querySelector('[name=fm_rel]').value === 'Self') {
+    first.querySelector('[name=fm_name]').value = $('#f_name').value;
+    if (age !== null) first.querySelector('[name=fm_age]').value = age;
+  }
+  const husband = $('input[name=guardian_type]:checked')?.value === 'husband';
+  $('#husbandBox').classList.toggle('d-none', !husband);
+  $$('#husbandBox input, #husbandBox textarea').forEach(el => { if (el.id !== 'hNameShow') el.disabled = !husband; });
+  $('#f_h_dob').required = husband; $('#f_h_address').required = husband && !$('#hSame').checked; $('#consent').required = husband;
+  $('#f_h_address').disabled = !husband || $('#hSame').checked;
+  $('#hNameShow').value = $('#f_guardian_name').value;
+  $$('.hn').forEach(e => e.textContent = $('#f_guardian_name').value || 'the husband');
+  $$('.an').forEach(e => e.textContent = $('#f_name').value || 'the applicant');
+  const ha = ageFrom($('#f_h_dob').value); $('#hAgeOut').textContent = ha === null ? '-' : ha;
+  $('#f_relative_name').disabled = $('input[name=relative_in_center]:checked')?.value !== 'yes';
+}
+['#f_name', '#f_dob', '#f_guardian_name', '#f_h_dob', '#hSame'].forEach(s => $(s).addEventListener('input', sync));
+$$('input[name=guardian_type], input[name=relative_in_center]').forEach(r => r.addEventListener('change', sync));
+sync();
+
+function preview(inputSel, imgSel) { $(inputSel).addEventListener('change', e => { const f = e.target.files[0]; if (f) $(imgSel).src = URL.createObjectURL(f); }); }
+preview('#f_photo', '#photoPrev'); preview('#f_h_photo', '#hPhotoPrev');
+
+(function(){ const sel=document.getElementById('f_co_relation'), box=document.getElementById('coOtherBox');
+  function t(){ box.classList.toggle('d-none', sel.value!=='Other'); } sel.addEventListener('change',t); t(); })();
+</script>
+{% endblock %}

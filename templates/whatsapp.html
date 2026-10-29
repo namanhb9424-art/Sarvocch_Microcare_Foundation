@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}WhatsApp{% endblock %}
+{% block body %}
+<h4 class="mb-3">WhatsApp Channel Verification</h4>
+<div class="row g-3">
+  <div class="col-12 col-xl-8"><div class="card"><div class="card-header">Verify customer WhatsApp numbers</div>
+    <div class="alert alert-info small m-3 mb-0">Free flow: generate a code, tap <b>Open WhatsApp</b> (a standard <code>wa.me</code> click-to-chat link, no API or cost), send it, then enter the code the customer replies with.</div>
+    <div class="table-responsive"><table class="table align-middle mb-0">
+    <thead><tr><th>Customer</th><th>Mobile</th><th>WhatsApp</th><th>Action</th></tr></thead>
+    <tbody>{% for c in rows %}<tr><td>{{ c['name'] }}</td><td>{{ c['phone'] }}</td>
+    <td>{% if c['wa_verified'] %}<span class="badge text-bg-success"><i class="bi bi-patch-check-fill"></i> Verified</span>{% elif c['wa_otp'] %}<span class="badge text-bg-warning">Awaiting code</span>{% else %}<span class="badge text-bg-secondary">Not verified</span>{% endif %}</td>
+    <td>{% if not c['wa_verified'] %}
+      {% if c['wa_otp'] %}
+        <a target="_blank" class="btn btn-sm btn-success mb-1" href="{{ wa_link(c) }}"><i class="bi bi-whatsapp"></i> Open WhatsApp</a>
+        <form method="post" action="{{ url_for('whatsapp_verify', cid=c['id']) }}" class="d-flex gap-1"><input name="otp" class="form-control form-control-sm" placeholder="Code from customer" inputmode="numeric" style="max-width:150px"><button class="btn btn-sm btn-primary">Verify</button></form>
+        <div class="small text-muted">Demo code: {{ c['wa_otp'] }}</div>
+      {% else %}<form method="post" action="{{ url_for('whatsapp_send', cid=c['id']) }}"><button class="btn btn-sm btn-outline-success">Generate code</button></form>{% endif %}
+    {% else %}<a target="_blank" class="btn btn-sm btn-outline-success" href="https://wa.me/91{{ c['phone'] }}"><i class="bi bi-chat-dots"></i> Chat</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div></div>
+  <div class="col-12 col-xl-4"><div class="card h-100"><div class="card-header">Meta blue tick (Official Business Account)</div><div class="card-body small">
+    <p>The blue/green tick is awarded by <b>Meta</b> after it reviews your business - it can't be built into the app. This prototype shows the checklist and tracks progress.</p>
+    <ul class="list-unstyled mb-3">
+      <li><i class="bi bi-circle text-muted"></i> Create a Meta Business account (business.facebook.com)</li>
+      <li><i class="bi bi-circle text-muted"></i> Complete Meta Business Verification with legal documents</li>
+      <li><i class="bi bi-circle text-muted"></i> Set up WhatsApp Business Platform with a dedicated number</li>
+      <li><i class="bi bi-circle text-muted"></i> Get the display name approved</li>
+      <li><i class="bi bi-circle text-muted"></i> Apply for the official tick (Meta decides eligibility)</li></ul>
+    <p class="mb-0 text-muted">Sending automated messages through the official WhatsApp Business Platform later will need Meta's API (it may involve conversation charges), so it's left out of this free prototype. Please confirm current requirements with Meta.</p>
+  </div></div></div>
+</div>
+{% endblock %}

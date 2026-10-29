@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login slip {{ cust_code(c['id']) }}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>body{background:#fff}.slip{max-width:520px;margin:20px auto;border:2px dashed #0f766e;padding:20px}.cred{font-family:monospace;font-size:22px;background:#f1f5f4;padding:6px 10px;border-radius:6px;display:inline-block}
+@media print{.no-print{display:none!important}}</style></head><body>
+<div class="slip">
+  <h4 class="mb-0">Sarvocch Microcare Foundation</h4><div>सर्वोच्च माइक्रोकेयर फाउंडेशन</div><hr>
+  <div class="fw-bold mb-2">Your online account / आपका ऑनलाइन खाता</div>
+  <div>Name / नाम: <b>{{ c['name'] }}</b> ({{ cust_code(c['id']) }})</div>
+  <div class="mt-2">Username / यूज़रनेम:<br><span class="cred">{{ sl.user }}</span></div>
+  <div class="mt-2">Temporary password / अस्थायी पासवर्ड:<br><span class="cred">{{ sl.pw }}</span></div>
+  <ol class="mt-3 small"><li>Open the portal link given by your branch and sign in. / शाखा द्वारा दिए गए लिंक पर लॉग-इन करें।</li>
+    <li>You will be asked to choose your own password. / आपको अपना नया पासवर्ड बनाना होगा।</li>
+    <li>Under <b>My Loans</b> you can see your EMI dates and pay online. / <b>My Loans</b> में EMI देखें और भुगतान करें।</li>
+    <li>Do not share this password with anyone. / यह पासवर्ड किसी को न बताएँ।</li></ol>
+</div>
+<div class="no-print text-center"><button class="btn btn-primary" onclick="window.print()">Print slip</button>
+<a class="btn btn-outline-secondary" href="{{ url_for('crm_detail', cid=c['id']) }}">Back to customer</a></div>
+</body></html>

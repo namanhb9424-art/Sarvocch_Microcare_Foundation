@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import filters %}
+{% block title %}CRM{% endblock %}
+{% block body %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h4 class="mb-0">CRM · Customers & Leads</h4>
+  <div class="d-flex gap-2">{% if can('kycform') %}<a class="btn btn-primary btn-sm" href="{{ url_for('kyc_form_new') }}"><i class="bi bi-person-vcard"></i> New customer (KYC form)</a>{% endif %}
+  <button class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newc"><i class="bi bi-plus-lg"></i> Quick lead</button></div></div>
+<form id="newc" method="post" action="{{ url_for('crm_new') }}" class="card card-body mb-3 collapse">
+  <div class="row g-2">
+    <div class="col-12 col-md-3"><input name="name" class="form-control" placeholder="Full name" required></div>
+    <div class="col-6 col-md-2"><input name="phone" class="form-control" placeholder="Mobile (10 digits)" pattern="[6-9][0-9]{9}" required></div>
+    <div class="col-6 col-md-2"><input name="dob" type="date" class="form-control" title="Date of birth"></div>
+    <div class="col-12 col-md-3"><input name="address" class="form-control" placeholder="Address"></div>
+    <div class="col-6 col-md-2"><select name="stage" class="form-select"><option value="lead">Lead</option><option value="prospect">Prospect</option><option value="customer">Customer</option></select></div>
+    <div class="col-6 col-md-3"><select name="branch" class="form-select">{% for b in BRANCHES %}<option>{{ b }}</option>{% endfor %}</select></div>
+    {% if g.user['role'] != 'field_agent' %}<div class="col-6 col-md-3"><select name="agent_id" class="form-select"><option value="">Assign agent…</option>{% for a in agents %}<option value="{{ a['id'] }}">{{ a['name'] }}</option>{% endfor %}</select></div>{% endif %}
+    <div class="col-12 col-md-2"><button class="btn btn-success w-100">Save</button></div>
+  </div></form>
+{% set extra %}
+<div class="col-6 col-md-3"><label class="form-label small mb-0">Search</label><input name="q" value="{{ term }}" class="form-control form-control-sm" placeholder="Name / phone"></div>
+<div class="col-6 col-md-2"><label class="form-label small mb-0">Stage</label><select name="stage" class="form-select form-select-sm"><option value="">All</option>
+{% for s in ['lead','prospect','customer','closed'] %}<option {{ 'selected' if stage==s }}>{{ s }}</option>{% endfor %}</select></div>
+{% endset %}
+{{ filters(f, agents, extra=extra) }}
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+<thead><tr><th>Name</th><th>Phone</th><th>Stage</th><th>KYC</th><th>Branch</th><th>Agent</th><th>Latest application</th></tr></thead>
+<tbody>{% for c in rows %}<tr>
+<td><a href="{{ url_for('crm_detail', cid=c['id']) }}" class="fw-semibold text-decoration-none">{{ c['name'] }}</a></td><td>{{ c['phone'] }}</td>
+<td><span class="badge text-bg-{{ {'lead':'secondary','prospect':'info','customer':'success','closed':'dark'}[c['stage']] }}">{{ c['stage'] }}</span></td>
+<td>{% if c['kyc_status']=='verified' %}<i class="bi bi-patch-check-fill text-success"></i> Verified{% else %}<span class="text-warning">Pending</span>{% endif %}</td>
+<td class="small">{{ c['branch'] }}</td><td class="small">{{ c['agent_name'] or '-' }}</td><td>{{ (c['app_status'] or '-').replace('_',' ') }}</td></tr>
+{% else %}<tr><td colspan="7" class="text-center text-muted py-4">No records</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

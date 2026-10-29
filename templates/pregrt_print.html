@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pre-GRT #{{ p['id'] }}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>body{background:#fff;font-size:11px}.sheet{max-width:1100px;margin:auto;padding:14px}h1{font-size:19px}td,th{padding:2px 4px!important;vertical-align:middle}
+.sign{height:45px;border-bottom:1px solid #444;margin-top:8px}@media print{.no-print{display:none!important}.sheet{padding:0}@page{size:A4 landscape;margin:10mm}}</style></head><body><div class="sheet">
+<div class="no-print d-flex gap-2 mb-2"><button class="btn btn-sm btn-primary" onclick="window.print()">Print / Save as PDF</button><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('pregrt_detail', pid=p['id']) }}">Back</a></div>
+<h1 class="mb-0">Sarvocch Microcare Foundation · सर्वोच्च माइक्रोकेयर फाउंडेशन</h1>
+<div class="fw-bold">Pre-GRT – Group form / प्री-जीआरटी समूह प्रपत्र</div>
+<table class="table table-bordered table-sm my-2"><tr><td>Branch: <b>{{ p['branch'] }}</b></td><td>Centre: <b>{{ p['center_no'] or '-' }}</b></td><td>Group: <b>{{ p['group_no'] or '-' }}</b></td><td>Village: <b>{{ p['village'] or '-' }}</b></td><td>District: <b>{{ p['district'] or '-' }}</b></td><td>Date: <b>{{ p['form_date']|dt }}</b></td></tr>
+<tr><td colspan="2">PSO: {{ p['pso_name'] or '-' }} ({{ p['pso_empid'] or '-' }})</td><td colspan="2">BM: {{ p['bm_name'] or '-' }} ({{ p['bm_empid'] or '-' }})</td><td colspan="2">Group leader knows duties: <b>{{ 'Yes' if p['leader_knows_duties']=='yes' else 'No' if p['leader_knows_duties']=='no' else '-' }}</b></td></tr></table>
+<table class="table table-bordered table-sm"><thead class="table-light"><tr><th>#</th><th>Borrower</th><th>Husband / father</th><th>Age</th><th>Voter ID</th><th>Aadhaar (last 4)</th><th>Family in group</th><th>House</th><th>Land ha</th><th>Livestock</th><th>Income / yr</th><th>Fam.</th><th>Cat.</th><th>Loan ₹</th><th>Purpose</th><th>Freq.</th><th>Inst.</th><th>Confirmations ✓</th></tr></thead><tbody>
+{% for m in members %}<tr><td>{{ m['sno'] }}</td><td>{{ m['name'] }}</td><td>{{ m['husband_name'] }}</td><td>{{ m['age'] }}</td><td>{{ m['voter_id'] }}</td><td>{{ m['aadhaar4'] }}</td><td>{{ m['family_in_group'] }}</td><td>{{ m['house_type']|label(K.house_types) if m['house_type'] else '' }}</td><td>{{ m['land_ha'] }}</td><td>{{ m['livestock'] }}</td><td>{{ m['annual_income'] }}</td><td>{{ m['family_size'] }}</td><td>{{ m['category'] }}</td><td>{{ m['loan_amount']|int }}</td><td>{{ m['purpose'] }}</td><td>{{ m['frequency'] }}</td><td>{{ m['instalments'] }}</td>
+<td>{% set n = namespace(c=0) %}{% for k,_ in K.pregrt_checks %}{% if m[k] %}{% set n.c = n.c+1 %}{% endif %}{% endfor %}{{ n.c }}/{{ K.pregrt_checks|length }}</td></tr>{% endfor %}
+<tr class="fw-bold"><td colspan="13" class="text-end">Total</td><td>{{ members|sum(attribute='loan_amount')|int }}</td><td colspan="4"></td></tr></tbody></table>
+<div class="small">Each member confirmed: {% for k,l in K.pregrt_checks %}{{ l.split(' / ')[0] }}{{ '; ' if not loop.last }}{% endfor %}.</div>
+<div class="row mt-3"><div class="col-3"><div class="sign"></div>Group leader</div><div class="col-3"><div class="sign"></div>PSO</div><div class="col-3"><div class="sign"></div>Branch manager</div><div class="col-3 small">Status: <b>{{ p['status'] }}</b>{% if p['verified_by'] %}<br>Verified by {{ p['verified_by'] }} on {{ p['verified_on']|dt }}{% endif %}</div></div>
+</div></body></html>

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}KYC Verify{% endblock %}
+{% block body %}
+<h4 class="mb-1">Identity Verification (KYC)</h4>
+<div class="alert alert-info small">Prototype mode: format checks are real (Aadhaar Verhoeff checksum, PAN and Voter ID patterns). The government lookup is <b>mocked</b>; Aadhaar OTP is <code>{{ otp }}</code>. Real UIDAI / NSDL / ECI access needs a licensed KYC provider (usually paid) and is a later phase.</div>
+<div class="row g-3">
+  <div class="col-12 col-lg-5"><div class="card"><div class="card-body">
+    <label class="form-label">Customer</label>
+    <select id="cust" class="form-select mb-2"><option value="">(no customer, just test a number)</option>{% for c in customers %}<option value="{{ c['id'] }}">{{ c['name'] }} · KYC {{ c['kyc_status'] }}</option>{% endfor %}</select>
+    <label class="form-label">Document</label>
+    <select id="kind" class="form-select mb-2"><option value="aadhaar">Aadhaar (12 digits)</option><option value="pan">PAN</option><option value="voter">Voter ID (EPIC)</option></select>
+    <input id="number" class="form-control mb-2" placeholder="Enter number" autocomplete="off">
+    <div id="otpbox" class="d-none"><input id="otp" class="form-control mb-2" placeholder="Enter OTP" inputmode="numeric"></div>
+    <button id="go" class="btn btn-primary w-100">Verify</button>
+    <div id="res" class="mt-3"></div>
+  </div></div></div>
+  <div class="col-12 col-lg-7"><div class="card"><div class="card-header">Status</div><div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th>Customer</th><th>Aadhaar</th><th>PAN</th><th>Voter</th><th>KYC</th></tr></thead>
+    <tbody>{% for c in customers %}<tr><td>{{ c['name'] }}</td><td>{{ c['aadhaar'] or '-' }}</td><td>{{ c['pan'] or '-' }}</td><td>{{ c['voter'] or '-' }}</td>
+    <td>{% if c['kyc_status']=='verified' %}<span class="badge text-bg-success">verified</span>{% else %}<span class="badge text-bg-warning">pending</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>
+    <div class="small text-muted mt-2">Test values — Aadhaar: <code>{{ sample_aadhaar }}</code> · PAN: <code>ABCPE1234F</code> · Voter ID: <code>ABC1234567</code></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const $=id=>document.getElementById(id);
+async function verify(){
+  const body={type:$('kind').value,number:$('number').value,otp:$('otp').value,customer_id:$('cust').value};
+  const r=await fetch('/api/kyc/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();
+  const ok=d.ok;
+  $('res').innerHTML='<div class="alert alert-'+(d.verified?'success':ok?'info':'danger')+' mb-0">'+d.message+'</div>';
+  $('otpbox').classList.toggle('d-none',!d.need_otp);
+  if(d.verified) setTimeout(()=>location.reload(),1500);
+}
+$('go').onclick=verify;
+$('kind').onchange=()=>{$('otpbox').classList.add('d-none');$('res').innerHTML=''};
+</script>
+{% endblock %}

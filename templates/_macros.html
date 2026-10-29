@@ -1,0 +1,14 @@
+{% macro filters(f, agents, action='', extra='') %}
+<form class="row g-2 align-items-end mb-3 filterbar" method="get" action="{{ action }}">
+  {{ extra|safe }}
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">Branch</label>
+    <select name="branch" class="form-select form-select-sm"><option value="">All branches</option>
+      {% for b in BRANCHES %}<option {{ 'selected' if f.branch==b }}>{{ b }}</option>{% endfor %}</select></div>
+  <div class="col-6 col-md-3"><label class="form-label small mb-0">Agent</label>
+    <select name="agent" class="form-select form-select-sm"><option value="">All agents</option>
+      {% for a in agents %}<option value="{{ a['id'] }}" {{ 'selected' if f.agent==a['id']|string }}>{{ a['name'] }}</option>{% endfor %}</select></div>
+  <div class="col-6 col-md-2"><label class="form-label small mb-0">From</label><input type="date" name="dfrom" value="{{ f.dfrom }}" class="form-control form-control-sm"></div>
+  <div class="col-6 col-md-2"><label class="form-label small mb-0">To</label><input type="date" name="dto" value="{{ f.dto }}" class="form-control form-control-sm"></div>
+  <div class="col-12 col-md-2 d-flex gap-1"><button class="btn btn-sm btn-primary flex-fill">Apply</button><a href="{{ action or request.path }}" class="btn btn-sm btn-outline-secondary">Reset</a></div>
+</form>
+{% endmacro %}

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Users & Roles{% endblock %}
+{% block body %}
+<h4 class="mb-3">User Roles & Access Control (RBAC)</h4>
+<div class="card mb-3"><div class="card-header">Users</div><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+<thead><tr><th>Name</th><th>Username</th><th>Branch</th><th>Role</th><th></th></tr></thead>
+<tbody>{% for u in rows %}<tr><td>{{ u['name'] }}</td><td class="text-muted">{{ u['username'] }}</td><td class="small">{{ u['branch'] }}</td>
+<form method="post" action="{{ url_for('user_role', uid=u['id']) }}" id="uf{{ u['id'] }}"></form>
+<td><select form="uf{{ u['id'] }}" name="role" class="form-select form-select-sm" {{ 'disabled' if u['id']==g.user['id'] }}>{% for r in ROLES %}<option {{ 'selected' if u['role']==r }}>{{ r }}</option>{% endfor %}</select></td>
+<td>{% if u['id']!=g.user['id'] %}<button form="uf{{ u['id'] }}" class="btn btn-sm btn-outline-primary">Change</button>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><div class="card-header">Permission matrix</div><div class="table-responsive"><table class="table table-sm text-center mb-0">
+<thead><tr><th class="text-start">Module</th>{% for r in ROLES %}<th>{{ r.replace('_',' ') }}</th>{% endfor %}</tr></thead>
+<tbody>{% for m in mods %}<tr><td class="text-start">{{ m[1] }}</td>{% for r in ROLES %}<td>{% if '*' in perms[r] or m[0] in perms[r] %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-dash text-muted"></i>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+<div class="card-footer small text-muted">Field agents additionally see only their own customers, applications, loans and visits (data-level scoping).</div></div>
+{% endblock %}

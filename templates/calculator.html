@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}EMI Calculator{% endblock %}
+{% block body %}
+<h4 class="mb-3">EMI Calculator</h4>
+<form class="card card-body mb-3" method="get">
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-md-3"><label class="form-label small">Load a product</label>
+      <select id="prod" class="form-select" onchange="const o=this.selectedOptions[0];if(o.value){amount.value=o.dataset.amt;rate.value=o.dataset.rate;tenure.value=o.dataset.ten;method.value=o.dataset.m}">
+        <option value="">Custom</option>
+        {% for p in prods %}<option value="{{p['id']}}" data-amt="{{ p['min_amt']|int }}" data-rate="{{p['rate']}}" data-ten="{{p['min_tenure']}}" data-m="{{p['method']}}">{{ p['name'] }}</option>{% endfor %}
+      </select></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Amount (₹)</label><input id="amount" name="amount" type="number" min="1" value="{{ P|int }}" class="form-control"></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Rate % p.a.</label><input id="rate" name="rate" type="number" step="0.1" min="0" max="60" value="{{ rate }}" class="form-control"></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Tenure (months)</label><input id="tenure" name="tenure" type="number" min="1" max="120" value="{{ n }}" class="form-control"></div>
+    <div class="col-6 col-md-2"><label class="form-label small">Method</label>
+      <select id="method" name="method" class="form-select"><option value="reducing" {{ 'selected' if method=='reducing' }}>Reducing balance</option><option value="flat" {{ 'selected' if method=='flat' }}>Flat rate</option></select></div>
+    <div class="col-12 col-md-1"><button class="btn btn-primary w-100">Go</button></div>
+  </div>
+</form>
+<div class="row g-3 mb-3">
+  <div class="col-4"><div class="card kpi"><div class="card-body"><div class="text-muted small">Monthly EMI</div><div class="fs-4 fw-semibold">{{ emi|inr }}</div></div></div></div>
+  <div class="col-4"><div class="card kpi"><div class="card-body"><div class="text-muted small">Total interest</div><div class="fs-4 fw-semibold">{{ interest|inr }}</div></div></div></div>
+  <div class="col-4"><div class="card kpi"><div class="card-body"><div class="text-muted small">Total payable</div><div class="fs-4 fw-semibold">{{ total|inr }}</div></div></div></div>
+</div>
+<div class="card"><div class="card-header">Repayment schedule</div><div class="table-responsive"><table class="table table-sm table-striped mb-0">
+<thead><tr><th>#</th><th>Due date</th><th class="text-end">EMI</th><th class="text-end">Principal</th><th class="text-end">Interest</th><th class="text-end">Balance</th></tr></thead>
+<tbody>{% for r in rows %}<tr><td>{{r.no}}</td><td>{{ r.due_date|dt }}</td><td class="text-end">{{ r.emi|inr }}</td><td class="text-end">{{ r.principal|inr }}</td><td class="text-end">{{ r.interest|inr }}</td><td class="text-end">{{ r.balance|inr }}</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

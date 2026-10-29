@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Application #{{ a['id'] }}{% endblock %}
+{% block body %}
+<a href="{{ url_for('applications') }}" class="small text-decoration-none">&larr; Applications</a>
+<div class="d-flex flex-wrap justify-content-between align-items-center my-2 gap-2">
+  <h4 class="mb-0">Application #{{ a['id'] }} <span class="badge text-bg-primary fs-6">{{ a['status'].replace('_',' ') }}</span></h4>
+  {% if a['status'] in ('sanctioned','disbursed') %}<a class="btn btn-outline-danger btn-sm" href="{{ url_for('sanction_pdf', aid=a['id']) }}"><i class="bi bi-file-earmark-lock2"></i> Sanction letter (password protected)</a>{% endif %}
+</div>
+{% if a['status'] in ('sanctioned','disbursed') %}<div class="alert alert-warning small">The sanction letter PDF opens with the customer's date of birth as <b>DDMMYYYY</b> ({{ (a['dob'] or '2000-01-01').split('-')|reverse|join('') }} for this customer).</div>{% endif %}
+{% if flags %}<div class="alert alert-warning py-2 small"><b><i class="bi bi-exclamation-triangle"></i> Points for the approver</b><ul class="mb-0">{% for f in flags %}<li>{{ f }}</li>{% endfor %}</ul></div>{% endif %}
+<div class="row g-3">
+  <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Loan</div><div class="card-body small">
+    <div><b>Customer:</b> <a href="{{ url_for('crm_detail', cid=a['customer_id']) }}">{{ a['cname'] }}</a> · {{ a['cphone'] }} · KYC <span class="badge text-bg-{{ 'success' if a['kyc_status']=='verified' else 'warning' }}">{{ a['kyc_status'] }}</span></div>
+    <div><b>Product:</b> {{ a['pname'] }} ({{ a['method'] }})</div><div><b>Amount:</b> {{ a['amount']|inr }}{% if x and x['requested_amt'] and x['requested_amt']!=a['amount'] %} <span class="text-muted">(requested {{ x['requested_amt']|inr }})</span>{% endif %} · <b>Tenure:</b> {{ a['tenure'] }} m · <b>Rate:</b> {{ a['rate'] }}%</div>
+    <div><b>EMI:</b> {{ emi|inr }} · </div>
+    {% set fs = fee_split(a['amount'], a['fee_pct']) %}<div><b>Processing fee ({{ a['fee_pct'] }}%):</b> {{ fs['fee']|inr }} + CGST {{ fs['half_rate']|round(2) }}% {{ fs['cgst']|inr }} + SGST {{ fs['half_rate']|round(2) }}% {{ fs['sgst']|inr }} = <b>{{ fs['total']|inr }}</b></div>
+    {% if grp %}<div><b>Group:</b> <a href="{{ url_for('pregrt_detail', pid=grp['id']) }}">Pre-GRT #{{ grp['id'] }}</a> (applied together as a group)</div>{% endif %}<div><b>Purpose:</b> {{ a['purpose'] or '-' }}</div>
+    <hr><div><b>Monthly income:</b> {{ a['income']|inr }} ({{ a['occupation'] or '-' }}, {{ a['employer'] or '-' }})</div>
+    <div><b>Co-applicant:</b> {% if a['co_name'] %}{{ a['co_name'] }} ({{ a['co_relation'] }}) · {{ a['co_phone'] }} · {{ a['co_income']|inr }}{% else %}none{% endif %}</div>
+    <hr><b>Documents:</b>
+    {% for k,v in docs.items() %}<div><i class="bi bi-paperclip"></i> <a href="{{ url_for('uploaded', name=v) }}" target="_blank">{{ k.replace('doc_','') }}</a></div>{% else %}<div class="text-muted">none uploaded</div>{% endfor %}
+    <div><b>Centre / Group:</b> {{ (kycf['center_no'] if kycf else '') or '-' }} / {{ (kycf['group_no'] if kycf else '') or '-' }}</div>
+    <div><a href="{{ url_for('kyc_form_print', cid=a['customer_id']) }}" target="_blank">View customer KYC form</a></div>
+    {% if loan %}<hr><a href="{{ url_for('loan_detail', lid=loan['id']) }}" class="btn btn-sm btn-success">Open loan #{{ loan['id'] }}</a>{% endif %}
+  </div></div></div>
+  <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Workflow</div><div class="card-body">
+    {% set stages = ['submitted','under_review','approved','sanctioned','disbursed'] %}
+    {% set idx = stages.index(a['status']) if a['status'] in stages else -1 %}
+    <div class="d-flex flex-wrap gap-1 mb-3 small">
+      {% for s in stages %}<span class="badge rounded-pill text-bg-{{ 'success' if loop.index0 <= idx else 'light' }}">{{ s.replace('_',' ') }}</span>{% endfor %}
+      {% if a['status']=='rejected' %}<span class="badge rounded-pill text-bg-danger">rejected</span>{% endif %}
+    </div>
+    {% if a['remarks'] %}<div class="alert alert-secondary py-2 small">Remarks: {{ a['remarks'] }}</div>{% endif %}
+    <form method="post" action="{{ url_for('application_action', aid=a['id']) }}">
+      <input name="remarks" class="form-control mb-2" placeholder="Remarks (optional)">
+      {% if can('approve') and a['status']=='under_review' %}<div class="input-group mb-2"><span class="input-group-text">Approved amount ₹</span><input name="approved_amount" type="number" min="1" max="{{ a['amount']|int }}" class="form-control" placeholder="{{ a['amount']|int }} (leave empty to approve the requested amount)"></div>{% endif %}
+      <div class="d-flex flex-wrap gap-2">
+        {% if can('approve') and a['status']=='submitted' %}<button name="action" value="review" class="btn btn-info">Start review</button>{% endif %}
+        {% if can('approve') and a['status']=='under_review' %}<button name="action" value="approve" class="btn btn-primary">Approve</button>{% endif %}
+        {% if can('approve') and a['status'] in ('submitted','under_review','approved','sanctioned') %}<button name="action" value="reject" class="btn btn-outline-danger">Reject</button>{% endif %}
+        {% if can('disburse') and a['status']=='approved' %}<button name="action" value="sanction" class="btn btn-warning">Sanction</button>{% endif %}
+        {% if can('disburse') and a['status']=='sanctioned' %}<button name="action" value="disburse" class="btn btn-success">Disburse</button>{% endif %}
+      </div>
+    </form>
+  </div></div></div>
+</div>
+
+<div class="row g-3 mt-1">
+{% if x %}
+  <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Monthly cash flow / मुद्रा प्रवाह</div><div class="card-body small">
+    <div class="row"><div class="col-6"><b>Income</b>
+      {% for k,l in K.inc_fields %}<div class="d-flex justify-content-between"><span>{{ l.split(' / ')[0] }}</span><span>{{ x[k]|inr }}</span></div>{% endfor %}
+      <div class="d-flex justify-content-between border-top fw-bold"><span>Total</span><span>{{ x['income_total']|inr }}</span></div></div>
+    <div class="col-6"><b>Expenses</b>
+      {% for k,l in K.exp_fields %}<div class="d-flex justify-content-between"><span>{{ l.split(' / ')[0].split(' - ')[0] }}</span><span>{{ x[k]|inr }}</span></div>{% endfor %}
+      <div class="d-flex justify-content-between border-top fw-bold"><span>Total</span><span>{{ x['expense_total']|inr }}</span></div></div></div>
+    <div class="alert alert-{{ 'success' if x['net_saving']>=emi else 'warning' }} py-1 mt-2 mb-0">Net saving {{ x['net_saving']|inr }} vs EMI {{ emi|inr }}</div>
+  </div></div></div>
+  <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Other details</div><div class="card-body small">
+    <div><b>Loan cycle:</b> {{ x['loan_cycle'] }}</div>
+    <div><b>Documents deposited:</b> {% for d in docs_dep %}{{ d|label(K.docs) }}{{ ', ' if not loop.last }}{% else %}-{% endfor %}{% if x['docs_other'] %} ({{ x['docs_other'] }}){% endif %}</div>
+    <div><b>Life insurance:</b> {% if x['insurance_wanted']=='yes' %}Yes – for {{ x['insurance_for'] }}{% else %}No{% endif %}</div>
+    <div><b>Group leader recommends:</b> {{ x['group_rec']|inr if x['group_rec'] else '-' }} · <b>Centre leader:</b> {{ x['center_rec']|inr if x['center_rec'] else '-' }}</div>
+    <div><b>Applicant declaration:</b> {{ 'signed (ticked)' if x['declaration'] else '-' }}</div>
+    <hr><b>Previous loans</b>
+    <table class="table table-sm mb-0"><thead><tr><th>#</th><th>Amount</th><th>Purpose</th><th>Repayment</th><th>Paid</th><th>Reason</th></tr></thead><tbody>
+    {% for p_ in prev %}<tr><td>{{ p_.cycle or loop.index }}</td><td>{{ p_.amount|inr }}</td><td>{{ p_.purpose }}</td><td>{{ p_.freq }}</td><td>{{ p_.ontime.replace('_',' ') }}</td><td>{{ p_.reason or p_.absence or '' }}</td></tr>{% else %}<tr><td colspan="6" class="text-muted">First loan – no previous loans</td></tr>{% endfor %}</tbody></table>
+  </div></div></div>
+{% endif %}
+  <div class="col-12"><div class="card"><div class="card-header">Approval trail / अनुमोदन क्रम</div><div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th>When</th><th>Step</th><th>By</th><th>Role</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>
+    {% for r in approvals %}<tr><td>{{ r['at'][:16].replace('T',' ') }}</td><td>{{ r['stage'] }}</td><td>{{ r['by_user'] }}</td><td>{{ r['by_role'].replace('_',' ') }}</td><td>{{ r['amount']|inr }}</td><td class="text-wrap">{{ r['remarks'] }}</td></tr>{% else %}<tr><td colspan="6" class="text-muted">No history</td></tr>{% endfor %}</tbody></table></div></div></div>
+</div>
+{% endblock %}

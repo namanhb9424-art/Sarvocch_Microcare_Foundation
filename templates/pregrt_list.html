@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import filters %}
+{% block title %}Pre-GRT{% endblock %}
+{% block body %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h4 class="mb-0">Pre-GRT · Group forms</h4>
+  {% if can('kycform') %}<a href="{{ url_for('pregrt_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> New group form</a>{% endif %}</div>
+<p class="text-muted small">Pre-GRT (Group Recognition Test) is recorded before loans are sanctioned: the group of {{ K.pregrt_min }}–{{ K.pregrt_max }} women is trained and each member confirms she understands the rules.</p>
+{% set extra %}<div class="col-6 col-md-2"><label class="form-label small mb-0">Status</label><select name="status" class="form-select form-select-sm"><option value="">All</option>{% for s in ['draft','submitted','verified'] %}<option value="{{ s }}" {{ 'selected' if status==s }}>{{ s }}</option>{% endfor %}</select></div>{% endset %}
+{{ filters(f, agents, extra=extra) }}
+<div class="card"><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle">
+<thead><tr><th>#</th><th>Date</th><th>Branch</th><th>Centre / Group</th><th>Village</th><th>Officer</th><th>Members</th><th>Total ask</th><th>Status</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r['id'] }}</td><td>{{ r['form_date']|dt }}</td><td>{{ r['branch'] }}</td><td>{{ r['center_no'] or '-' }} / {{ r['group_no'] or '-' }}</td><td>{{ r['village'] or '-' }}</td><td>{{ r['agent_name'] or '-' }}</td><td>{{ r['members'] }}</td><td>{{ r['total']|inr }}</td>
+<td>{% if r['status']=='draft' and r['review_remarks'] %}<span class="badge text-bg-warning">returned</span> {% endif %}<span class="badge text-bg-{{ {'draft':'secondary','submitted':'info','verified':'success'}.get(r['status'],'light') }}">{{ r['status'] }}</span></td>
+<td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('pregrt_detail', pid=r['id']) }}">Open</a></td></tr>
+{% else %}<tr><td colspan="10" class="text-muted p-3">No group forms found.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

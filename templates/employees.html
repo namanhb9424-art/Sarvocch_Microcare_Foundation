@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Employees{% endblock %}
+{% block body %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h4 class="mb-0">Employee Onboarding & Management</h4>
+<button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newe"><i class="bi bi-person-plus"></i> Onboard</button></div>
+<form id="newe" method="post" action="{{ url_for('employee_new') }}" class="card card-body mb-3 collapse"><div class="row g-2">
+  <div class="col-12 col-md-3"><input name="name" class="form-control" placeholder="Full name" required></div>
+  <div class="col-6 col-md-2"><input name="phone" class="form-control" placeholder="Mobile" pattern="[6-9][0-9]{9}" required></div>
+  <div class="col-6 col-md-3"><input name="email" type="email" class="form-control" placeholder="Email"></div>
+  <div class="col-6 col-md-2"><input name="designation" class="form-control" placeholder="Designation" required></div>
+  <div class="col-6 col-md-2"><input name="salary" type="number" min="0" class="form-control" placeholder="Monthly salary"></div>
+  <div class="col-6 col-md-3"><select name="branch" class="form-select">{% for b in BRANCHES %}<option>{{ b }}</option>{% endfor %}</select></div>
+  <div class="col-6 col-md-3"><select name="manager_id" class="form-select"><option value="">Reports to…</option>{% for e in rows %}<option value="{{ e['id'] }}">{{ e['name'] }}</option>{% endfor %}</select></div>
+  <div class="col-12 col-md-3"><input name="joined" type="date" class="form-control" value="{{ today }}"></div>
+  <div class="col-12"><span class="small me-2">Documents received:</span>{% for d in onboard_docs %}<label class="me-3 small"><input type="checkbox" name="docs" value="{{ d }}"> {{ d }}</label>{% endfor %}</div>
+  <div class="col-12"><button class="btn btn-success">Start onboarding</button></div></div></form>
+<div class="row g-3">
+  <div class="col-12 col-lg-4"><div class="card h-100"><div class="card-header">Organisation hierarchy</div><div class="card-body small">
+    {% for depth,e in org %}<div style="margin-left:{{ depth*20 }}px" class="mb-1">{% if depth %}<i class="bi bi-arrow-return-right text-muted"></i> {% endif %}<b>{{ e['name'] }}</b> <span class="text-muted">· {{ e['designation'] }}</span></div>{% endfor %}</div></div></div>
+  <div class="col-12 col-lg-8"><div class="card"><div class="card-header">Staff & onboarding status</div><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Name</th><th>Role / branch</th><th>Docs</th><th>Background check</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for e in rows %}<tr>
+      <form method="post" action="{{ url_for('employee_update', eid=e['id']) }}" id="ef{{ e['id'] }}"></form>
+      <td>{{ e['name'] }}<div class="small text-muted">{{ e['manager_name'] and 'Mgr: '+e['manager_name'] or '' }}</div></td>
+      <td class="small">{{ e['designation'] }}<br>{{ e['branch'] }}</td>
+      <td class="small">{% for d in onboard_docs %}<label class="d-block"><input form="ef{{ e['id'] }}" type="checkbox" name="docs" value="{{ d }}" {{ 'checked' if d in docs_map[e['id']] }}> {{ d }}</label>{% endfor %}</td>
+      <td><select form="ef{{ e['id'] }}" name="bg_check" class="form-select form-select-sm">{% for s in ['pending','in_progress','cleared','failed'] %}<option {{ 'selected' if e['bg_check']==s }}>{{ s }}</option>{% endfor %}</select></td>
+      <td><select form="ef{{ e['id'] }}" name="status" class="form-select form-select-sm">{% for s in ['onboarding','active','exited'] %}<option {{ 'selected' if e['status']==s }}>{{ s }}</option>{% endfor %}</select></td>
+      <td><button form="ef{{ e['id'] }}" class="btn btn-sm btn-outline-primary">Save</button> <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ url_for('employee_print', eid=e['id']) }}" title="Print"><i class="bi bi-printer"></i></a></td></tr>{% endfor %}</tbody></table></div></div></div>
+</div>
+{% endblock %}

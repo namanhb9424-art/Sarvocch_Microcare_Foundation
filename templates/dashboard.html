@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import filters %}
+{% block title %}Dashboard{% endblock %}
+{% block body %}
+<h4 class="mb-3">Dashboard</h4>
+{{ filters(f, agents) }}
+<div class="row g-3 mb-3">
+  {% for label,val,icon in [('Customers',k.customers,'people'),('Open leads / prospects',k.leads,'person-plus'),('Active loans',k.active_loans,'cash-coin'),
+      ('Disbursed',k.disbursed|inr,'box-arrow-up-right'),('Outstanding principal',k.outstanding|inr,'hourglass-split'),('Collected',k.collected|inr,'check2-circle'),('Overdue EMIs',k.overdue,'exclamation-triangle')] %}
+  {% set kd = {'Active loans':'active','Disbursed':'disbursed','Outstanding principal':'outstanding','Collected':'collected','Overdue EMIs':'overdue'}.get(label) %}
+  <div class="col-6 col-md-4 col-xl-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="text-muted small"><i class="bi bi-{{ icon }}"></i> {{ label }}</div><div class="fs-4 fw-semibold">{% if kd %}<a class="text-decoration-none text-reset stretched-link" href="{{ url_for('dashboard_details', kind=kd, branch=f.branch, agent=f.agent, dfrom=f.dfrom, dto=f.dto) }}">{{ val }}</a>{% else %}{{ val }}{% endif %}</div></div></div></div>
+  {% endfor %}
+</div>
+{% if map_pts %}<div class="card mb-3"><div class="card-header d-flex justify-content-between"><span><i class="bi bi-geo-alt"></i> Branch map <span class="small text-muted">· click a branch for its details</span></span><span class="small text-muted">admin only</span></div>
+  <div class="card-body p-0"><div id="bmap" style="height:340px"></div></div></div>{% endif %}
+<div class="row g-3">
+  <div class="col-12 col-lg-4"><div class="card"><div class="card-header">Outstanding by branch</div><div class="card-body"><canvas id="c1" height="220"></canvas></div></div></div>
+  <div class="col-12 col-lg-4"><div class="card"><div class="card-header">Applications by status</div><div class="card-body"><canvas id="c2" height="220"></canvas></div></div></div>
+  <div class="col-12 col-lg-4"><div class="card"><div class="card-header">Collections by agent</div><div class="card-body"><canvas id="c3" height="220"></canvas></div></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if map_pts %}<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function(){ if(!window.L) { document.getElementById('bmap').innerHTML='<div class="p-3 text-muted small">Map needs internet access to load.</div>'; return; }
+const pts={{ map_pts|tojson }}; const m=L.map('bmap'); 
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(m);
+const inr=v=>'\u20B9'+Number(v).toLocaleString('en-IN',{maximumFractionDigits:0});
+const b=[]; pts.forEach(p=>{ const mk=L.marker([p.lat,p.lng]).addTo(m); b.push([p.lat,p.lng]);
+  const tip=document.createElement('div'); tip.innerHTML='<b></b><br>'+p.loans+' active loans<br>Outstanding '+inr(p.out); tip.querySelector('b').textContent=p.name;
+  mk.bindTooltip(tip); mk.on('click',()=>{location=p.url;}); });
+if(b.length>1) m.fitBounds(b,{padding:[40,40]}); else m.setView(b[0],13);
+})();
+</script>{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const colors=['#0f766e','#d97706','#2563eb','#9333ea','#dc2626','#475569'];
+const Q={{ {'branch':f.branch,'agent':f.agent,'dfrom':f.dfrom,'dto':f.dto}|tojson }};
+const inr=v=>'\u20B9'+Number(v).toLocaleString('en-IN',{maximumFractionDigits:0});
+function go(kind,val){const u=new URLSearchParams();Object.entries(Q).forEach(([k,v])=>{if(v)u.set(k,v)});u.set('kind',kind);u.set('value',val);location='{{ url_for("dashboard_details") }}?'+u;}
+function mk(id,type,rows,lab,kind,extra){ if(!window.Chart) return;
+  new Chart(document.getElementById(id),{type:type,data:{labels:rows.map(r=>r[lab]),datasets:[{data:rows.map(r=>r.v!==undefined&&type!=='doughnut'?r.v:r.c),backgroundColor:colors}]},
+  options:{onClick:(e,els)=>{if(els.length)go(kind,rows[els[0].index][lab]);},onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';},
+  plugins:{legend:{display:type==='doughnut'},tooltip:{callbacks:{label:c=>{const r=rows[c.dataIndex];return extra(r);},footer:()=>'Click for details'}}},scales:type==='bar'?{y:{beginAtZero:true}}:{}}});}
+mk('c1','bar',{{ by_branch|tojson }},'b','branch',r=>['Outstanding: '+inr(r.v),r.n+' active loans']);
+mk('c2','doughnut',{{ by_status|tojson }},'status','status',r=>[r.c+' applications','Value: '+inr(r.v)]);
+mk('c3','bar',{{ by_agent|tojson }},'n','agent',r=>['Collected: '+inr(r.v),r.c+' payments']);
+</script>
+{% endblock %}

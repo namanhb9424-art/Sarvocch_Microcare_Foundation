@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Full settlement{% endblock %}
+{% block body %}
+<div class="row justify-content-center"><div class="col-12 col-md-8 col-lg-6">
+<a href="{{ url_for('loan_detail', lid=loan['id']) }}" class="small text-decoration-none">&larr; Back to loan</a>
+<div class="alert alert-info small mt-2">Demo payment gateway - <b>no real money moves</b>.</div>
+<div class="card mb-3"><div class="card-body">
+  <h5>Close loan #{{ loan['id'] }} early (full settlement)</h5>
+  <table class="table table-sm mb-2">
+    <tr><td>Principal outstanding (up to date)</td><td class="text-end">{{ quote['principal']|inr }}</td></tr>
+    <tr><td>+ Next interest (instalment #{{ quote['next_no'] }})</td><td class="text-end">{{ quote['interest']|inr }}</td></tr>
+    <tr class="fw-bold"><td>Total payable</td><td class="text-end fs-5">{{ quote['total']|inr }}</td></tr>
+  </table>
+  <div class="small text-muted">{{ quote['left'] }} instalment(s) are left. Interest of later instalments ({{ quote['saved']|inr }}) is not charged.</div>
+</div></div>
+<div class="card"><div class="card-body">
+  <form method="post" onsubmit="return confirm('Close this loan by paying the full settlement amount?')">
+    <ul class="nav nav-pills mb-3" id="tabs">
+      {% for k,l in [('upi','UPI'),('card','Card'),('netbanking','Net banking'),('wallet','Wallet')] %}<li class="nav-item"><a href="#" class="nav-link {{ 'active' if loop.first }}" data-ch="{{ k }}">{{ l }}</a></li>{% endfor %}
+    </ul>
+    <input type="hidden" name="channel" id="channel" value="upi">
+    <div class="ch" id="ch-upi"><input name="upi_id" class="form-control" placeholder="yourname@upi"></div>
+    <div class="ch d-none" id="ch-card"><input name="card_no" class="form-control" placeholder="4111 1111 1111 1111" inputmode="numeric"></div>
+    <div class="ch d-none" id="ch-netbanking"><select name="bank" class="form-select"><option value="">Choose bank</option><option>State Bank of India</option><option>HDFC Bank</option><option>ICICI Bank</option><option>Bank of Baroda</option></select></div>
+    <div class="ch d-none" id="ch-wallet"><select name="wallet" class="form-select"><option value="">Choose wallet</option><option>Paytm</option><option>PhonePe</option><option>Amazon Pay</option></select></div>
+    <button class="btn btn-danger w-100 mt-3">Pay {{ quote['total']|inr }} and close loan</button>
+  </form>
+</div></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('#tabs a').forEach(a=>a.onclick=e=>{e.preventDefault();
+  document.querySelectorAll('#tabs a').forEach(x=>x.classList.remove('active'));a.classList.add('active');
+  document.querySelectorAll('.ch').forEach(c=>c.classList.add('d-none'));
+  document.getElementById('ch-'+a.dataset.ch).classList.remove('d-none');document.getElementById('channel').value=a.dataset.ch;});
+</script>
+{% endblock %}

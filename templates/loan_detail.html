@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Loan #{{ loan['id'] }}{% endblock %}
+{% block body %}
+<a href="{{ url_for('portal' if g.user['role']=='customer' else 'loans') }}" class="small text-decoration-none">&larr; Back</a>
+<div class="d-flex flex-wrap justify-content-between align-items-center my-2 gap-2">
+  <h4 class="mb-0">Loan #{{ loan['id'] }} · {{ loan['cname'] }} <span class="badge text-bg-{{ 'success' if loan['status']=='active' else 'secondary' }} fs-6">{{ loan['status'] }}</span></h4>
+  <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-secondary" target="_blank" href="{{ url_for('loan_card', lid=loan['id']) }}"><i class="bi bi-card-list"></i> Loan card</a>
+  {% if loan['status']=='active' %}<a class="btn btn-outline-danger" href="{{ url_for('settle', lid=loan['id']) }}"><i class="bi bi-check2-all"></i> Full settlement</a>
+  <a class="btn btn-success" href="{{ url_for('pay', lid=loan['id']) }}"><i class="bi bi-credit-card"></i> Pay next EMI</a>{% endif %}</div>
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-4"><div class="card h-100"><div class="card-header">Terms</div><div class="card-body small">
+    <div>Product: {{ loan['pname'] }}</div><div>Principal: {{ loan['principal']|inr }}</div><div>Rate: {{ loan['rate'] }}% ({{ loan['method'] }})</div>
+    <div>Tenure: {{ loan['tenure'] }} months · EMI {{ loan['emi']|inr }}</div><div>Started: {{ loan['start_date']|dt }}</div>
+    {% if loan['closure_date'] %}<div>Closed on: {{ loan['closure_date']|dt }}{% if loan['settled'] %} · <span class="badge text-bg-warning">settled early {{ loan['settle_amount']|inr }}</span>{% endif %}</div>{% endif %}
+    {% if quote %}<hr><div class="fw-semibold">Settlement today</div><div>Principal outstanding {{ quote['principal']|inr }} + next interest {{ quote['interest']|inr }} = <b>{{ quote['total']|inr }}</b></div>{% endif %}</div></div></div>
+  <div class="col-12 col-lg-4"><div class="card h-100"><div class="card-header">AutoPay (eNACH / eMandate) <span class="small text-muted">· mock</span></div><div class="card-body small">
+    {% if mandate and mandate['status']=='active' %}
+      <div class="alert alert-success py-2">Active · {{ mandate['mtype'] }} · {{ mandate['bank'] }} ••••{{ mandate['acct_last4'] }}</div>
+      <form method="post" action="{{ url_for('autopay', lid=loan['id']) }}"><button name="action" value="cancel" class="btn btn-sm btn-outline-danger">Cancel mandate</button></form>
+    {% elif loan['status']=='active' %}
+      <form method="post" action="{{ url_for('autopay', lid=loan['id']) }}" class="row g-2">
+        <div class="col-12"><select name="mtype" class="form-select form-select-sm"><option>eNACH</option><option>eMandate (UPI AutoPay)</option><option>Standing instruction</option></select></div>
+        <div class="col-12"><input name="acct" class="form-control form-control-sm" placeholder="Bank account number" required></div>
+        <div class="col-12"><input name="ifsc" class="form-control form-control-sm" placeholder="IFSC e.g. SBIN0001234" required></div>
+        <div class="col-12"><button class="btn btn-sm btn-primary w-100">Enable AutoPay</button></div></form>
+    {% else %}<span class="text-muted">Not applicable</span>{% endif %}
+  </div></div></div>
+  <div class="col-12 col-lg-4"><div class="card h-100"><div class="card-header">NOC (15 days after closure)</div><div class="card-body small">
+    {% if loan['status']!='closed' %}<span class="text-muted">Available after the loan is fully repaid + 15 days.</span>
+    {% elif noc_ok %}<div class="alert alert-success py-2">Eligible</div>{% if can('loans') %}<a class="btn btn-sm btn-primary" href="{{ url_for('noc_pdf', lid=loan['id']) }}"><i class="bi bi-file-earmark-check"></i> Generate NOC</a>{% endif %}
+    {% else %}<div class="alert alert-warning py-2">Eligible on {{ noc_on|string|dt }}</div>
+      {% if g.user['role']=='admin' %}<form method="post" action="{{ url_for('demo_backdate', lid=loan['id']) }}"><button class="btn btn-sm btn-outline-secondary">Demo: skip 15 days</button></form>{% endif %}{% endif %}
+  </div></div></div>
+</div>
+<div class="row g-3">
+  <div class="col-12 col-xl-8"><div class="card"><div class="card-header">Repayment schedule</div><div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th>#</th><th>Due</th><th class="text-end">EMI</th><th class="text-end">Principal</th><th class="text-end">Interest</th><th class="text-end">Balance</th><th>Status</th></tr></thead>
+    <tbody>{% for s in sched %}<tr class="{{ 'table-danger' if not s['paid'] and s['due_date'] < today }}"><td>{{ s['no'] }}</td><td>{{ s['due_date']|dt }}</td><td class="text-end">{{ s['emi']|inr }}</td><td class="text-end">{{ s['principal']|inr }}</td><td class="text-end">{{ s['interest']|inr }}</td><td class="text-end">{{ s['balance']|inr }}</td>
+    <td>{% if s['paid'] %}<span class="text-success">paid {{ s['paid_on']|dt }}</span>{% elif s['due_date'] < today %}<b class="text-danger">overdue</b>{% else %}due{% endif %}</td></tr>{% endfor %}</tbody></table></div></div></div>
+  <div class="col-12 col-xl-4"><div class="card"><div class="card-header">Payments</div><ul class="list-group list-group-flush small">
+    {% for p in pays %}<li class="list-group-item d-flex justify-content-between"><span>{{ p['at'][:10]|dt }} · {{ p['channel'] }}<br><span class="text-muted">{{ p['ref'] }}</span></span><b>{{ p['amount']|inr }}</b></li>{% else %}<li class="list-group-item text-muted">No payments yet</li>{% endfor %}</ul></div></div>
+</div>
+{% endblock %}
