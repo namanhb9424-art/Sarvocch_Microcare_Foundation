@@ -13,6 +13,35 @@ copy, new tables are added automatically on the next start; delete the DB to get
 
 Demo logins: admin/admin123, manager1/manager123, uw1/uw123, agent1-3/agent123, cust1/cust123.
 
+---
+
+## 📱 Sarvocch Microcare Flutter Mobile Application (`sarvocch_app/`)
+
+A high-performance, modern cross-platform Flutter application providing 100% feature and visual parity with the web portal, styled with the exact `#0F766E` teal brand palette, Inter typography, smooth animations, and offline-first SQLite database.
+
+### Key Mobile Features
+- **Official Brand Identity**: Sourced directly from official badge logo (`assets/icon/app_logo.png`) with adaptive Android launcher mipmaps (mdpi to xxxhdpi) and branded Splash & Login screens.
+- **5-Role RBAC & Instant Role Switcher**:
+  - `admin` (`Aarav Admin`): Full system control, MFI lending policy thresholds, database resets.
+  - `manager` (`Meera Manager`): Pre-GRT group verifications, sanction limits, approval pipeline.
+  - `underwriter` (`Uday Underwriter`): Risk assessment, household EMI-to-income checks (<=60%), credit decisions.
+  - `field_agent` (`Ravi Field Officer`): Onboarding bilingual KYC, field collections with automatic payment & schedule updates, GPS attendance.
+  - `customer` (`Sunita Verma`): Self-service loan portal, interactive UPI QR repayment simulator, NOC and passbook download.
+- **Robust Navigation Hierarchy**: Safe routing architecture respecting Android back-button pop scopes, preventing accidental app exits on home screens, and full stack management during role switches.
+- **Local SQLite Engine**: Powered by `sqflite` with in-memory test fallback, initializing 18 relational tables mirroring the Flask schema.
+- **Cloud Database Quotations & Sync Engine**: Multi-cloud comparison (Neon PostgreSQL, Supabase, Neon Serverless, AWS RDS, GCP Cloud SQL, Turso LibSQL, PlanetScale) with real-time ping simulation and architecture bridge guidelines.
+
+### Running the Mobile App
+```bash
+cd sarvocch_app
+flutter pub get
+flutter test test/user_flows_test.dart  # 6/6 tests verify end-to-end user flows
+flutter run                             # Run on connected device or emulator
+flutter build apk --release             # Generate release APK
+```
+Release APK binary is generated at `sarvocch_app/build/app/outputs/flutter-apk/app-release.apk`.
+
+
 ## Onboarding flow (new)
 1. **New Customer (KYC Form)** – bilingual digital form: applicant, family members, house/land/bank, financial info,
    **husband's information and consent for the loan**, declarations, address-visit verification, photos.

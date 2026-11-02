@@ -7,3 +7,15 @@ __pycache__/
 .venv/
 venv/
 .vercel/
+
+# Flutter / Mobile
+sarvocch_app/.dart_tool/
+sarvocch_app/.flutter-plugins-dependencies
+sarvocch_app/.pub-cache/
+sarvocch_app/.pub/
+sarvocch_app/build/
+sarvocch_app/android/.gradle/
+sarvocch_app/android/local.properties
+sarvocch_app/*.apk
+*.apk
+
