@@ -30,7 +30,7 @@ class CloudDatabaseQuoteModel {
   final String category; // SQL, NoSQL, BaaS, Serverless
   final String logoIcon;
   final String tagLine;
-  final String suitability; // Why it fits Sarvocch microfinance portal
+  final String suitability; // Why it fits SARVOOCCH microfinance portal
   final String syncArchitecture; // How website + mobile app connect
   final String defaultEndpointTemplate;
   final List<CloudPlanTier> plans;

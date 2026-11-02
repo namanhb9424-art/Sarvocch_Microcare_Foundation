@@ -43,7 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Exit App?'),
-            content: const Text('Do you want to exit Sarvocch Microcare?'),
+            content: const Text('Do you want to exit SARVOOCCH Microcare?'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Stay')),
               ElevatedButton(
@@ -59,7 +59,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       },
       child: Scaffold(
-      appBar: const CustomAppBar(title: 'Sarvocch Microcare Portal'),
+      appBar: const CustomAppBar(title: 'SARVOOCCH Microcare Portal'),
       drawer: const CustomDrawer(currentRoute: '/dashboard'),
       body: RefreshIndicator(
         onRefresh: () => loan.fetchAll(),

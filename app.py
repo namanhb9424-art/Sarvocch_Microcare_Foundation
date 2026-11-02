@@ -1,5 +1,5 @@
 """
-Sarvocch Microcare Foundation - Micro Finance Management Portal (PROTOTYPE)
+SARVOOCCH Microcare Foundation - Micro Finance Management Portal (PROTOTYPE)
 Flask + SQLite. Zero paid services: KYC, payment gateway, eNACH and WhatsApp are MOCKED.
 Run:  pip install -r requirements.txt && python app.py   ->  http://127.0.0.1:5000
 """
@@ -978,12 +978,12 @@ def sanction_pdf(aid):
                              canCopy=0, canAnnotate=0, strength=128)
     buf = io.BytesIO()
     doc = Doc(buf, pagesize=A4, encrypt=enc, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=20 * mm, bottomMargin=20 * mm,
-              title=f"Sarvocch Sanction Letter SL-{aid:05d}")
+              title=f"SARVOOCCH Sanction Letter SL-{aid:05d}")
     st = gss()
     emi = emi_calc(a["amount"], a["rate"], a["tenure"], a["method"])
     fs = fee_split(a["amount"], a["fee_pct"])
     fee = fs["fee"]
-    el = [Paragraph("Sarvocch Microcare Foundation", st["Title"]),
+    el = [Paragraph("SARVOOCCH Microcare Foundation", st["Title"]),
           Paragraph("LOAN SANCTION LETTER", st["Heading2"]),
           Paragraph(f"Ref: SL-{aid:05d} &nbsp;&nbsp; Date: {date.today().strftime('%d %b %Y')}", st["Normal"]), Spacer(1, 8),
           Paragraph(f"To,<br/><b>{a['cname']}</b><br/>{a['address'] or ''}<br/>Mobile: {a['cphone']}", st["Normal"]), Spacer(1, 8),
@@ -1005,7 +1005,7 @@ def sanction_pdf(aid):
               "The first EMI falls due one month after disbursement; late payment attracts penal charges.",
               "This sanction is valid for 30 days from the date of this letter."]:
         el.append(Paragraph("&bull; " + c, st["Normal"]))
-    el += [Spacer(1, 16), Paragraph("Authorised Signatory<br/>Sarvocch Microcare Foundation (prototype - not a legal document)", st["Normal"])]
+    el += [Spacer(1, 16), Paragraph("Authorised Signatory<br/>SARVOOCCH Microcare Foundation (prototype - not a legal document)", st["Normal"])]
     doc.build(el)
     buf.seek(0)
     return send_file(buf, mimetype="application/pdf", download_name=f"sanction_letter_{aid}.pdf")
@@ -1025,7 +1025,7 @@ def noc_pdf(lid):
     buf = io.BytesIO()
     doc = Doc(buf, pagesize=A4, leftMargin=25 * mm, rightMargin=25 * mm, topMargin=25 * mm)
     st = gss()
-    el = [Paragraph("Sarvocch Microcare Foundation", st["Title"]), Paragraph("NO OBJECTION CERTIFICATE", st["Heading2"]),
+    el = [Paragraph("SARVOOCCH Microcare Foundation", st["Title"]), Paragraph("NO OBJECTION CERTIFICATE", st["Heading2"]),
           Paragraph(f"Ref: NOC-{lid:05d} &nbsp;&nbsp; Date: {date.today().strftime('%d %b %Y')}", st["Normal"]), Spacer(1, 14),
           Paragraph(f"This is to certify that <b>{loan['cname']}</b> has fully repaid the {loan['pname']} loan "
                     f"(Loan ID {lid}) of Rs. {loan['principal']:,.2f}, closed on {fmt_date(loan['closure_date'])}. "
@@ -1528,7 +1528,7 @@ def sw():
 @app.route("/manifest.json")
 def manifest():
     icon = lambda f, sz, purpose="any": {"src": f"/static/icons/{f}", "sizes": sz, "type": "image/png", "purpose": purpose}
-    data = dict(id="/", name="Sarvocch Microcare Foundation", short_name="Sarvocch", description="Field officer app: visits, collections and offline sync",
+    data = dict(id="/", name="SARVOOCCH Microcare Foundation", short_name="SARVOOCCH", description="Field officer app: visits, collections and offline sync",
                 start_url="/?source=pwa", scope="/", display="standalone", orientation="portrait", lang="en",
                 background_color="#ffffff", theme_color="#0f766e", categories=["finance", "business"],
                 icons=[icon("icon-192.png", "192x192"), icon("icon-512.png", "512x512"),
@@ -1712,7 +1712,7 @@ def whatsapp_verify(cid):
 
 @app.template_global()
 def wa_link(c):
-    msg = f"Hello {c['name']}, your Sarvocch Microcare Foundation verification code is {c['wa_otp']}. Please reply with this code to confirm your WhatsApp number."
+    msg = f"Hello {c['name']}, your SARVOOCCH Microcare Foundation verification code is {c['wa_otp']}. Please reply with this code to confirm your WhatsApp number."
     from urllib.parse import quote
     return f"https://wa.me/91{c['phone']}?text={quote(msg)}"
 

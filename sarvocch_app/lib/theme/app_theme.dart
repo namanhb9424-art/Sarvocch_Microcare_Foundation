@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Brand Teal Palette - Exactly matching Sarvocch Microcare Foundation
+  // Brand Teal Palette - Exactly matching SARVOOCCH Microcare Foundation
   static const Color tealPrimary = Color(0xFF0F766E);
   static const Color tealDark = Color(0xFF0B5E57);
   static const Color tealLight = Color(0xFF14B8A6);

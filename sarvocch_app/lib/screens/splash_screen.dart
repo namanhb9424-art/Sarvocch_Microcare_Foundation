@@ -114,7 +114,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Sarvocch Microcare',
+                  'SARVOOCCH Microcare',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 26,

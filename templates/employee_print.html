@@ -5,7 +5,7 @@
 <style>body{background:#fff;font-size:13px}.sheet{max-width:780px;margin:auto;padding:16px}h1{font-size:20px}.lbl{color:#555;width:30%}.sign{height:50px;border-bottom:1px solid #444;margin-top:10px}
 @media print{.no-print{display:none!important}.sheet{padding:0}}</style></head><body><div class="sheet">
 <div class="no-print d-flex gap-2 mb-2"><button class="btn btn-sm btn-primary" onclick="window.print()">Print / Save as PDF</button><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('employees') }}">Back</a></div>
-<h1 class="mb-0">Sarvocch Microcare Foundation</h1><div class="fw-bold mb-2">EMPLOYEE DETAILS FORM / कर्मचारी विवरण प्रपत्र</div>
+<h1 class="mb-0">SARVOOCCH Microcare Foundation</h1><div class="fw-bold mb-2">EMPLOYEE DETAILS FORM / कर्मचारी विवरण प्रपत्र</div>
 <table class="table table-bordered table-sm">
 <tr><td class="lbl">Employee ID</td><td>EMP{{ '%04d'|format(e['id']) }}</td><td class="lbl">Date of joining</td><td>{{ e['joined']|dt if e['joined'] else '-' }}</td></tr>
 <tr><td class="lbl">Name</td><td>{{ e['name'] }}</td><td class="lbl">Designation</td><td>{{ e['designation'] or '-' }}</td></tr>

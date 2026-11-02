@@ -98,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Sarvocch Microcare',
+                            'SARVOOCCH Microcare',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,

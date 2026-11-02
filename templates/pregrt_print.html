@@ -5,7 +5,7 @@
 <style>body{background:#fff;font-size:11px}.sheet{max-width:1100px;margin:auto;padding:14px}h1{font-size:19px}td,th{padding:2px 4px!important;vertical-align:middle}
 .sign{height:45px;border-bottom:1px solid #444;margin-top:8px}@media print{.no-print{display:none!important}.sheet{padding:0}@page{size:A4 landscape;margin:10mm}}</style></head><body><div class="sheet">
 <div class="no-print d-flex gap-2 mb-2"><button class="btn btn-sm btn-primary" onclick="window.print()">Print / Save as PDF</button><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('pregrt_detail', pid=p['id']) }}">Back</a></div>
-<h1 class="mb-0">Sarvocch Microcare Foundation · सर्वोच्च माइक्रोकेयर फाउंडेशन</h1>
+<h1 class="mb-0">SARVOOCCH Microcare Foundation · सर्वोच्च माइक्रोकेयर फाउंडेशन</h1>
 <div class="fw-bold">Pre-GRT – Group form / प्री-जीआरटी समूह प्रपत्र</div>
 <table class="table table-bordered table-sm my-2"><tr><td>Branch: <b>{{ p['branch'] }}</b></td><td>Centre: <b>{{ p['center_no'] or '-' }}</b></td><td>Group: <b>{{ p['group_no'] or '-' }}</b></td><td>Village: <b>{{ p['village'] or '-' }}</b></td><td>District: <b>{{ p['district'] or '-' }}</b></td><td>Date: <b>{{ p['form_date']|dt }}</b></td></tr>
 <tr><td colspan="2">PSO: {{ p['pso_name'] or '-' }} ({{ p['pso_empid'] or '-' }})</td><td colspan="2">BM: {{ p['bm_name'] or '-' }} ({{ p['bm_empid'] or '-' }})</td><td colspan="2">Group leader knows duties: <b>{{ 'Yes' if p['leader_knows_duties']=='yes' else 'No' if p['leader_knows_duties']=='no' else '-' }}</b></td></tr></table>

@@ -16,7 +16,7 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  group('Sarvocch Microcare Foundation — Comprehensive User Flow & Role Tests', () {
+  group('SARVOOCCH Microcare Foundation — Comprehensive User Flow & Role Tests', () {
     late AuthProvider auth;
     late LoanProvider loan;
     late CustomerProvider customer;

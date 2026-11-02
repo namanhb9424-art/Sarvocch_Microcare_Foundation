@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/loan_model.dart';
 import '../../providers/loan_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/document_viewer_sheet.dart';
 
 class LoanDetailScreen extends StatefulWidget {
   final LoanModel loan;
@@ -301,6 +302,27 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       appBar: AppBar(
         title: Text('Loan #LN-${_currentLoan.id}'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Loan Passbook',
+            onPressed: () {
+              DocumentViewerSheet.show(
+                context,
+                type: DocumentType.loanPassbook,
+                data: {
+                  'id': _currentLoan.id,
+                  'customer_name': _currentLoan.customerName,
+                  'product_name': _currentLoan.productName,
+                  'principal': _currentLoan.principal,
+                  'rate': _currentLoan.rate,
+                  'method': _currentLoan.method,
+                  'emi': _currentLoan.emi,
+                  'start_date': _currentLoan.startDate,
+                  'tenure': _currentLoan.tenure,
+                },
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.qr_code_2),
             tooltip: 'Loan Card QR',

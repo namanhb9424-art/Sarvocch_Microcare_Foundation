@@ -10,7 +10,7 @@ class CloudPricingData {
         logoIcon: 'database',
         tagLine: 'Open-source Firebase alternative with full Postgres & Row Level Security',
         suitability:
-            'Ideal match for Sarvocch. The existing SQLite schema directly maps to PostgreSQL. Built-in Auth, Row-Level Security matches RBAC (admin, manager, underwriter, agent, customer).',
+            'Ideal match for SARVOOCCH. The existing SQLite schema directly maps to PostgreSQL. Built-in Auth, Row-Level Security matches RBAC (admin, manager, underwriter, agent, customer).',
         syncArchitecture:
             'Bidirectional sync: Mobile uses SQLite cache + Supabase Realtime WebSocket changes. Website connects via PostgreSQL connection pooler (pgBouncer).',
         defaultEndpointTemplate: 'https://[PROJECT-REF].supabase.co/rest/v1',

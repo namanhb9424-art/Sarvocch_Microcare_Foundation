@@ -37,7 +37,7 @@ class _CustomerPortalScreenState extends State<CustomerPortalScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Exit App?'),
-            content: const Text('Do you want to exit Sarvocch Microcare?'),
+            content: const Text('Do you want to exit SARVOOCCH Microcare?'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Stay')),
               ElevatedButton(
@@ -311,7 +311,7 @@ class _CustomerPortalScreenState extends State<CustomerPortalScreen> {
             Text('Loan Account #LN-${loan.id} has been fully settled and closed.'),
             const SizedBox(height: 6),
             const Text(
-              'Certificate No: SMF-NOC-2026-0941\nAuthorized signatory: Sarvocch Microcare Foundation',
+              'Certificate No: SMF-NOC-2026-0941\nAuthorized signatory: SARVOOCCH Microcare Foundation',
               style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ],

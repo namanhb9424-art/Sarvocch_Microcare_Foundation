@@ -4,6 +4,7 @@ import '../../models/customer_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/customer_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/document_viewer_sheet.dart';
 
 class CrmDetailScreen extends StatefulWidget {
   final CustomerModel customer;
@@ -66,6 +67,22 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
             icon: const Icon(Icons.badge_outlined),
             tooltip: 'KYC Form',
             onPressed: () => Navigator.pushNamed(context, '/kyc-form', arguments: c.id),
+          ),
+          IconButton(
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Customer Login Slip',
+            onPressed: () {
+              DocumentViewerSheet.show(
+                context,
+                type: DocumentType.loginSlip,
+                data: {
+                  'id': c.id,
+                  'name': c.name,
+                  'phone': c.phone,
+                  'branch': c.branch,
+                },
+              );
+            },
           ),
         ],
       ),

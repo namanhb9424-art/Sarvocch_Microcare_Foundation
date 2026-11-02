@@ -43,6 +43,12 @@ class CustomDrawer extends StatelessWidget {
         _NavItem(id: 'field', label: 'Field Operations & Sync', icon: Icons.explore_outlined, route: '/field'),
       if (user.can('attendance'))
         _NavItem(id: 'attendance', label: 'Attendance & Geofence', icon: Icons.access_time_outlined, route: '/attendance'),
+      if (user.can('whatsapp'))
+        _NavItem(id: 'whatsapp', label: 'WhatsApp Hub & OTP', icon: Icons.chat_outlined, route: '/whatsapp'),
+      if (user.can('hrm') || user.can('employees'))
+        _NavItem(id: 'hrm', label: 'HRM & Staff Management', icon: Icons.badge_outlined, route: '/hrm'),
+      if (user.can('branches') || user.role == 'admin')
+        _NavItem(id: 'branches', label: 'Branch Offices & Portfolio', icon: Icons.business_outlined, route: '/branches'),
       _NavItem(id: 'cloud_quote', label: 'Cloud DB Quotations & Connect', icon: Icons.cloud_sync_outlined, route: '/cloud-quotes'),
       if (user.role == 'admin')
         _NavItem(id: 'settings', label: 'Admin Settings & Policies', icon: Icons.settings_outlined, route: '/settings'),

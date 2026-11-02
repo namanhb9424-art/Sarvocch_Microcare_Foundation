@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  sarvoocch-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sarvoocch-platform:latest
+    container_name: sarvoocch-web
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    environment:
+      - PORT=5000
+      - FLASK_DEBUG=0
+      - SECRET_KEY=sarvoocch_enterprise_secure_secret_key_2026
+    volumes:
+      - sarvoocch-data:/app/instance
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  sarvoocch-data:
+    driver: local

@@ -6,6 +6,8 @@ import '../../providers/pregrt_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/custom_drawer.dart';
+import '../../widgets/document_viewer_sheet.dart';
+import 'group_apply_screen.dart';
 
 class PreGrtScreen extends StatefulWidget {
   const PreGrtScreen({super.key});
@@ -222,7 +224,7 @@ class _PreGrtScreenState extends State<PreGrtScreen> {
                   ),
                 ],
 
-                if (grp.status == 'verified')
+                if (grp.status == 'verified') ...[
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -242,6 +244,46 @@ class _PreGrtScreenState extends State<PreGrtScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.note_add, size: 16),
+                          label: const Text('Group Loan Apply'),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => GroupApplyScreen(group: grp)),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.print, size: 16),
+                        label: const Text('Certificate'),
+                        onPressed: () {
+                          DocumentViewerSheet.show(
+                            context,
+                            type: DocumentType.preGrtCertificate,
+                            data: {
+                              'center_no': grp.centerNo,
+                              'group_no': grp.groupNo,
+                              'village': grp.village,
+                              'district': grp.district,
+                              'branch': grp.branch,
+                              'pso_name': grp.psoName,
+                              'pso_empid': grp.psoEmpid,
+                              'verified_by': grp.verifiedBy,
+                              'verified_on': grp.verifiedOn,
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

@@ -14,12 +14,14 @@ import 'providers/pregrt_provider.dart';
 import 'screens/applications/applications_screen.dart';
 import 'screens/applications/apply_loan_screen.dart';
 import 'screens/attendance/attendance_screen.dart';
+import 'screens/branches/branches_screen.dart';
 import 'screens/calculator/emi_calculator_screen.dart';
 import 'screens/cloud_quotations/cloud_quotation_screen.dart';
 import 'screens/crm/crm_list_screen.dart';
 import 'screens/crm/kyc_form_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/field/field_tasks_screen.dart';
+import 'screens/hrm/hrm_screen.dart';
 import 'screens/kyc_verify/kyc_verify_screen.dart';
 import 'screens/loans/loans_list_screen.dart';
 import 'screens/login_screen.dart';
@@ -28,6 +30,7 @@ import 'screens/pregrt/pregrt_screen.dart';
 import 'screens/products/products_screen.dart';
 import 'screens/settings/admin_settings_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/whatsapp/whatsapp_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -39,11 +42,11 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  runApp(const SarvocchApp());
+  runApp(const SarvoocchApp());
 }
 
-class SarvocchApp extends StatelessWidget {
-  const SarvocchApp({super.key});
+class SarvoocchApp extends StatelessWidget {
+  const SarvoocchApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +60,7 @@ class SarvocchApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CloudQuoteProvider()),
       ],
       child: MaterialApp(
-        title: 'Sarvocch Microcare Foundation',
+        title: 'SARVOOCCH Microcare Foundation',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         initialRoute: '/',
@@ -77,6 +80,9 @@ class SarvocchApp extends StatelessWidget {
           '/products': (_) => const ProductsScreen(),
           '/field': (_) => const FieldTasksScreen(),
           '/attendance': (_) => const AttendanceScreen(),
+          '/branches': (_) => const BranchesScreen(),
+          '/hrm': (_) => const HrmScreen(),
+          '/whatsapp': (_) => const WhatsAppScreen(),
           '/cloud-quotes': (_) => const CloudQuotationScreen(),
           '/settings': (_) => const AdminSettingsScreen(),
         },
