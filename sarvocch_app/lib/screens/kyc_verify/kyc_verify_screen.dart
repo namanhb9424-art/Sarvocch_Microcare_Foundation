@@ -21,7 +21,6 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
 
   bool _isAadhaarValid = true;
   bool _isPanValid = true;
-  bool _otpSent = false;
   String? _verificationResult;
 
   @override
@@ -207,7 +206,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                       controller: _voterCtrl,
                       decoration: const InputDecoration(
                         labelText: 'Voter ID (EPIC Number)',
-                        prefixIcon: const Icon(Icons.badge_outlined),
+                        prefixIcon: Icon(Icons.badge_outlined),
                       ),
                     ),
                     const SizedBox(height: 18),
