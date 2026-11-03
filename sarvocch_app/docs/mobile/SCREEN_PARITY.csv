@@ -1,0 +1,27 @@
+Screen ID,Website Route,Screen Name,Mobile Screen Widget,Mobile File Path,Role Access,Current Status,Parity Notes
+SCR-01,/login,Login Screen,LoginScreen,lib/screens/login_screen.dart,All Roles,IMPLEMENTED,Includes 1-click demo switcher & password reveal
+SCR-02,/dashboard,Executive Dashboard,DashboardScreen,lib/screens/dashboard_screen.dart,Admin / Manager / Underwriter,IN_PROGRESS,KPI cards and charts; branch pie chart to be made dynamic
+SCR-03,/crm,Borrower CRM Pipeline,CrmListScreen,lib/screens/crm/crm_list_screen.dart,Admin / Manager / PSO,IMPLEMENTED,Search filter and lead origination modal
+SCR-04,/crm/<cid>,Borrower CRM Details,CrmDetailScreen,lib/screens/crm/crm_detail_screen.dart,Admin / Manager / PSO,IMPLEMENTED,Multi-channel timeline and login slip generator
+SCR-05,/kyc-form/new,Bilingual KYC Form,KycFormScreen,lib/screens/crm/kyc_form_screen.dart,Admin / Manager / PSO,IN_PROGRESS,3-step stepper; expanding to full 4-step RBI JLG dossier
+SCR-06,/kyc,KYC Verification Queue,KycVerifyScreen,lib/screens/kyc_verify/kyc_verify_screen.dart,Admin / Manager / Underwriter / PSO,IMPLEMENTED,Verhoeff Aadhaar & PAN regex validation with OTP
+SCR-07,/apply,Loan Application Form,ApplyLoanScreen,lib/screens/applications/apply_loan_screen.dart,Admin / Manager / PSO,IN_PROGRESS,Dynamic rate product selector; expanding cashflow appraisal
+SCR-08,/applications,Applications Pipeline,ApplicationsScreen,lib/screens/applications/applications_screen.dart,Admin / Manager / Underwriter / PSO,IMPLEMENTED,Filter by stage (Submitted / Review / Approved / Sanctioned)
+SCR-09,/applications/<aid>,Application Appraisal & Approval,ApplicationDetailScreen,lib/screens/applications/application_detail_screen.dart,Admin / Manager / Underwriter,IMPLEMENTED,Multi-stage approval chain with audit trail & QR
+SCR-10,/loans,Active Loans Directory,LoansListScreen,lib/screens/loans/loans_list_screen.dart,Admin / Manager / Underwriter / PSO,IMPLEMENTED,Active vs Closed tabs with search and summary cards
+SCR-11,/loans/<lid>,Loan Details & Repayments,LoanDetailScreen,lib/screens/loans/loan_detail_screen.dart,Admin / Manager / Underwriter / PSO,IMPLEMENTED,EMI schedule, UPI payment modal, early payoff quotation
+SCR-12,/portal,Borrower Self-Service Portal,CustomerPortalScreen,lib/screens/portal/customer_portal_screen.dart,Customer (Borrower),IMPLEMENTED,Upcoming EMI card, instant UPI QR pay, NOC download
+SCR-13,/field,Field Officer Operations,FieldTasksScreen,lib/screens/field/field_tasks_screen.dart,Field Agent (PSO),IN_PROGRESS,Task collection recording; adding visual spatial map
+SCR-14,/attendance,Geofenced Attendance,AttendanceScreen,lib/screens/attendance/attendance_screen.dart,All Staff Roles,IN_PROGRESS,Haversine 2000m radius check; integrating real geolocator
+SCR-15,/pregrt,Pre-GRT Group Directory,PreGrtScreen,lib/screens/pregrt/pregrt_screen.dart,Admin / Manager / PSO,IMPLEMENTED,JLG group creation and BM approval workflow
+SCR-16,/pregrt/<pid>/apply,Batch Group Loan Application,GroupApplyScreen,lib/screens/pregrt/group_apply_screen.dart,Admin / Manager / PSO,IMPLEMENTED,Batch loan submission for verified group members
+SCR-17,/branches,Branch Directory & Portfolios,BranchesScreen,lib/screens/branches/branches_screen.dart,Admin / Manager,IMPLEMENTED,Branch address, head, GPS coordinates, portfolio statistics
+SCR-18,/products,Loan Products Configuration,ProductsScreen,lib/screens/products/products_screen.dart,All Staff Roles,IMPLEMENTED,Product interest rates, min/max bounds, reducing/flat calculation
+SCR-19,/hrm,HRM Human Resources & Payroll,HrmScreen,lib/screens/hrm/hrm_screen.dart,Admin / Manager,IN_PROGRESS,Staff list, leaves, quarterly performance, automated payroll
+SCR-20,/whatsapp,WhatsApp Communication Hub,WhatsAppScreen,lib/screens/whatsapp/whatsapp_screen.dart,Admin / Manager / PSO,IMPLEMENTED,OTP generation and customer communication logs
+SCR-21,/calculator,Loan EMI Calculator,EmiCalculatorScreen,lib/screens/calculator/emi_calculator_screen.dart,All Roles / Public,IMPLEMENTED,Flat and reducing balance calculation with monthly breakdown
+SCR-22,/settings,Admin Lending Policies & Rules,AdminSettingsScreen,lib/screens/settings/admin_settings_screen.dart,Admin Only,IMPLEMENTED,MFI age, group size, max EMI ratio, geofence radius
+SCR-23,/cloud-quotes,Cloud Database Quotations & Sync,CloudQuotationScreen,lib/screens/cloud_quotations/cloud_quotation_screen.dart,Admin Only,IMPLEMENTED,Database provider comparisons and connection tester
+SCR-24,/change-password,User Profile & Password,ProfileScreen,lib/screens/profile/profile_screen.dart,All Authenticated Roles,IN_PROGRESS,Password update with letter/digit validation
+SCR-25,/reports,Portfolio Analytics & Reports,ReportsScreen,lib/screens/reports/reports_screen.dart,Admin / Manager,IN_PROGRESS,PAR aging buckets, branch collection efficiency charts
+

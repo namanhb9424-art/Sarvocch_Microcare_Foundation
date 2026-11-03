@@ -49,7 +49,10 @@ class CustomDrawer extends StatelessWidget {
         _NavItem(id: 'hrm', label: 'HRM & Staff Management', icon: Icons.badge_outlined, route: '/hrm'),
       if (user.can('branches') || user.role == 'admin')
         _NavItem(id: 'branches', label: 'Branch Offices & Portfolio', icon: Icons.business_outlined, route: '/branches'),
+      if (user.role == 'admin' || user.role == 'branch_manager')
+        _NavItem(id: 'reports', label: 'Portfolio Reports & PAR', icon: Icons.analytics_outlined, route: '/reports'),
       _NavItem(id: 'cloud_quote', label: 'Cloud DB Quotations & Connect', icon: Icons.cloud_sync_outlined, route: '/cloud-quotes'),
+      _NavItem(id: 'profile', label: 'My Profile & Security', icon: Icons.account_circle_outlined, route: '/profile'),
       if (user.role == 'admin')
         _NavItem(id: 'settings', label: 'Admin Settings & Policies', icon: Icons.settings_outlined, route: '/settings'),
     ];

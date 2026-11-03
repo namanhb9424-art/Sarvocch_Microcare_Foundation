@@ -1,0 +1,32 @@
+Endpoint ID,HTTP Method,Route Path,Parameters / Request Body,Response Format,Mobile Service / Provider,Backend Route in app.py,Offline SQLite Mapping,Parity Status
+API-01,POST,/login,"{username, password}",JSON or Session redirect,AuthService / AuthProvider,line 507 (@app.route('/login')),users (username pw),API_CONNECTED
+API-02,POST,/logout,None,Redirect,AuthService / AuthProvider,line 584 (@app.route('/logout')),Session clear,API_CONNECTED
+API-03,POST,/change-password,"{old, new, again}",JSON or Flash redirect,AuthService / ProfileScreen,line 524 (@app.route('/change-password')),users.pw,API_CONNECTED
+API-04,GET,/api/emi,"?p=..&r=..&t=..&m=..",JSON {emi: float},LoanProvider / EmiCalculatorScreen,line 672 (@app.route('/api/emi')),LoanProvider calculation,API_CONNECTED
+API-05,POST,/crm/new,"{name, phone, dob, address, branch, agent_id}",Redirect / JSON,CustomerProvider / CrmListScreen,line 731 (@app.route('/crm/new')),customers table,API_CONNECTED
+API-06,POST,/crm/<cid>/log,"{channel, note}",Redirect / JSON,CustomerProvider / CrmDetailScreen,line 761 (@app.route('/crm/<cid>/log')),comm_logs table,API_CONNECTED
+API-07,POST,/crm/<cid>/stage,"{stage}",Redirect / JSON,CustomerProvider,line 793 (@app.route('/crm/<cid>/stage')),customers.stage,API_CONNECTED
+API-08,POST,/api/kyc/verify,"{customer_id, type, number, otp}",JSON {ok, need_otp, message},CustomerProvider / KycVerifyScreen,line 814 (@app.route('/api/kyc/verify')),customers aadhaar/pan/voter & kyc_status,API_CONNECTED
+API-09,POST,/kyc-form/new,"{center_no, group_no, guardian_type, ...}",Redirect / JSON,CustomerProvider / KycFormScreen,line 2169 (@app.route('/kyc-form/new')),kyc_forms table (40+ columns),API_CONNECTED
+API-10,POST,/apply,"{product_id, amount, tenure, purpose, income, occupation, employer, co_name, co_phone, co_relation, co_income, ...}",Redirect / JSON,LoanProvider / ApplyLoanScreen,line 2214 (@app.route('/apply')),applications & app_extra tables,API_CONNECTED
+API-11,POST,/applications/<aid>/action,"{action, sanctioned_amount, remarks}",Redirect / JSON,LoanProvider / ApplicationDetailScreen,line 903 (@app.route('/applications/<aid>/action')),approvals table & loans table (on disburse),API_CONNECTED
+API-12,POST,/pay/<lid>,"{schedule_id, amount, channel, ref}",Redirect / JSON,LoanProvider / LoanDetailScreen,line 1087 (@app.route('/pay/<lid>')),payments & schedule.paid,API_CONNECTED
+API-13,POST,/loans/<lid>/settle,"{channel}",Redirect / JSON,LoanProvider / LoanDetailScreen,line 2599 (@app.route('/loans/<lid>/settle')),loans.status='closed' & schedule,API_CONNECTED
+API-14,POST,/attendance/punch,"{branch, lat, lng}",JSON / Redirect,AttendanceProvider / AttendanceScreen,line 1347 (@app.route('/attendance/punch')),attendance table (in_time / out_time),API_CONNECTED
+API-15,POST,/attendance/request,"{day, in_time, out_time, reason}",Redirect / JSON,AttendanceProvider / AttendanceScreen,line 1355 (@app.route('/attendance/request')),att_requests table,API_CONNECTED
+API-16,POST,/attendance/request/<rid>/decide,"{decision, remarks}",Redirect / JSON,AttendanceProvider,line 1391 (@app.route('/attendance/request/<rid>/decide')),att_requests.status,API_CONNECTED
+API-17,POST,/field/task/<tid>/done,"{collected, notes}",Redirect / JSON,FieldTasksScreen,line 1448 (@app.route('/field/task/<tid>/done')),tasks.status='done' & payments,API_CONNECTED
+API-18,POST,/api/location,"{lat, lng}",JSON {ok: true},AttendanceProvider / SyncService,line 1415 (@app.route('/api/location')),users.lat users.lng,API_CONNECTED
+API-19,POST,/api/sync,"{items: [{uuid, task_id, collected, notes, captured_at, mark_done, lat, lng, photo}]}",JSON {accepted, duplicates, rejected},SyncService / CloudQuoteProvider,line 1478 (@app.route('/api/sync')),sync_log & tasks & payments,API_CONNECTED
+API-20,POST,/pregrt/new,"{branch, center_no, group_no, village, district, pso_name, bm_name, members: [...]}",Redirect / JSON,PreGrtProvider / PreGrtScreen,line 2538 (@app.route('/pregrt/new')),pregrt & pregrt_members,API_CONNECTED
+API-21,POST,/pregrt/<pid>/review,"{status, review_remarks}",Redirect / JSON,PreGrtProvider / PreGrtScreen,line 2558 (@app.route('/pregrt/<pid>/review')),pregrt.status ('verified'/'returned'),API_CONNECTED
+API-22,POST,/pregrt/<pid>/apply,"{product_id, amounts: [...]}",Redirect / JSON,LoanProvider / GroupApplyScreen,line 2648 (@app.route('/pregrt/<pid>/apply')),applications (batch creation),API_CONNECTED
+API-23,POST,/employees/new,"{name, designation, branch, manager_id, phone, email, salary}",Redirect / JSON,HrmScreen,line 1572 (@app.route('/employees/new')),employees table,API_CONNECTED
+API-24,POST,/hrm/leave,"{from_d, to_d, reason}",Redirect / JSON,HrmScreen,line 1624 (@app.route('/hrm/leave')),leaves table,API_CONNECTED
+API-25,POST,/hrm/leave/<lid>/<action>,None,Redirect / JSON,HrmScreen,line 1636 (@app.route('/hrm/leave/<lid>/<action>')),leaves.status,API_CONNECTED
+API-26,POST,/hrm/perf,"{user_id, period, rating, notes}",Redirect / JSON,HrmScreen,line 1644 (@app.route('/hrm/perf')),perf table,API_CONNECTED
+API-27,POST,/branches,"{name, code, address, phone, head_name, lat, lng, radius_m}",Redirect / JSON,BranchesScreen,line 2859 (@app.route('/branches')),branches table,API_CONNECTED
+API-28,POST,/settings,"{min_age, max_age, min_group, max_group, max_household_income, max_emi_pct, gst_rate, punch_radius_m}",Redirect / JSON,AdminSettingsScreen,line 2905 (@app.route('/settings')),settings table,API_CONNECTED
+API-29,POST,/whatsapp/<cid>/send,None,JSON / Redirect,WhatsAppScreen,line 1690 (@app.route('/whatsapp/<cid>/send')),customers.wa_otp,API_CONNECTED
+API-30,POST,/whatsapp/<cid>/verify,"{code}",JSON / Redirect,WhatsAppScreen,line 1699 (@app.route('/whatsapp/<cid>/verify')),customers.wa_verified=1,API_CONNECTED
+

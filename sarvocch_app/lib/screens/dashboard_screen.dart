@@ -252,84 +252,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                       ),
                       const SizedBox(height: 20),
-                      SizedBox(
-                        height: 180,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: PieChart(
-                                PieChartData(
-                                  sectionsSpace: 3,
-                                  centerSpaceRadius: 36,
-                                  sections: [
-                                    PieChartSectionData(
-                                      value: 86000,
-                                      title: '56%',
-                                      color: AppTheme.tealPrimary,
-                                      radius: 40,
-                                      titleStyle: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    PieChartSectionData(
-                                      value: 32000,
-                                      title: '21%',
-                                      color: AppTheme.tealLight,
-                                      radius: 40,
-                                      titleStyle: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    PieChartSectionData(
-                                      value: 20000,
-                                      title: '13%',
-                                      color: AppTheme.info,
-                                      radius: 40,
-                                      titleStyle: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    PieChartSectionData(
-                                      value: 15000,
-                                      title: '10%',
-                                      color: Colors.amber,
-                                      radius: 40,
-                                      titleStyle: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                      if (loan.branchPortfolio.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 30),
+                          child: Center(
+                            child: Text(
+                              'No branch portfolio data yet.',
+                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                             ),
-                            const Expanded(
-                              flex: 3,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                          ),
+                        )
+                      else
+                        Builder(
+                          builder: (context) {
+                            final colors = [
+                              AppTheme.tealPrimary,
+                              AppTheme.tealLight,
+                              AppTheme.info,
+                              Colors.amber.shade700,
+                              Colors.purple.shade600,
+                              Colors.indigo.shade600,
+                            ];
+                            final total = loan.branchPortfolio.values.fold<double>(0.0, (a, b) => a + b);
+                            final entries = loan.branchPortfolio.entries.toList();
+
+                            return SizedBox(
+                              height: 180,
+                              child: Row(
                                 children: [
-                                  _LegendItem(color: AppTheme.tealPrimary, label: 'Indore - VN (₹86k)'),
-                                  SizedBox(height: 6),
-                                  _LegendItem(color: AppTheme.tealLight, label: 'Indore - PL (₹32k)'),
-                                  SizedBox(height: 6),
-                                  _LegendItem(color: AppTheme.info, label: 'Bhopal - MP (₹20k)'),
-                                  SizedBox(height: 6),
-                                  _LegendItem(color: Colors.amber, label: 'Pipariya (₹15k)'),
+                                  Expanded(
+                                    flex: 3,
+                                    child: PieChart(
+                                      PieChartData(
+                                        sectionsSpace: 3,
+                                        centerSpaceRadius: 36,
+                                        sections: List.generate(entries.length, (i) {
+                                          final val = entries[i].value;
+                                          final pct = total > 0 ? ((val / total) * 100).round() : 0;
+                                          return PieChartSectionData(
+                                            value: val,
+                                            title: '$pct%',
+                                            color: colors[i % colors.length],
+                                            radius: 40,
+                                            titleStyle: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          );
+                                        }),
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 3,
+                                    child: SingleChildScrollView(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: List.generate(entries.length, (i) {
+                                          final bName = entries[i].key;
+                                          final amt = entries[i].value;
+                                          final formatted = amt >= 1000
+                                              ? '₹${(amt / 1000).toStringAsFixed(0)}k'
+                                              : '₹${amt.toStringAsFixed(0)}';
+                                          return Padding(
+                                            padding: const EdgeInsets.only(bottom: 6),
+                                            child: _LegendItem(
+                                              color: colors[i % colors.length],
+                                              label: '$bName ($formatted)',
+                                            ),
+                                          );
+                                        }),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      ),
                     ],
                   ),
                 ),

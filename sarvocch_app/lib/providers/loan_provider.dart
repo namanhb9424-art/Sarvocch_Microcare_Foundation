@@ -73,8 +73,17 @@ class LoanProvider extends ChangeNotifier {
       ''');
       _loans = loanRows.map((r) => LoanModel.fromMap(r)).toList();
 
-      // 4. Calculate KPIs
-      _calculateKpis();
+      // 4. Fetch actual overdue amount from schedule
+      final overdueResult = await db.rawQuery('''
+        SELECT IFNULL(SUM(s.emi), 0) as overdue_sum
+        FROM schedule s
+        JOIN loans l ON s.loan_id = l.id
+        WHERE s.paid = 0 AND s.due_date < date('now') AND l.status = 'active'
+      ''');
+      final dbOverdue = (overdueResult.first['overdue_sum'] as num?)?.toDouble() ?? 0.0;
+
+      // 5. Calculate KPIs
+      _calculateKpis(dbOverdue);
     } catch (e) {
       debugPrint('Error fetching loan data: $e');
     } finally {
@@ -83,7 +92,7 @@ class LoanProvider extends ChangeNotifier {
     }
   }
 
-  void _calculateKpis() {
+  void _calculateKpis(double dbOverdue) {
     double disbursed = 0.0;
     double outstanding = 0.0;
     int activeCount = 0;
@@ -105,14 +114,16 @@ class LoanProvider extends ChangeNotifier {
 
     _totalDisbursed = disbursed;
     _totalOutstanding = outstanding;
-    _totalOverdue = overdueCount > 0 ? 5200.0 : 0.0; // matching demo overdue
+    _totalOverdue = dbOverdue;
     _activeLoansCount = activeCount;
     _overdueLoansCount = overdueCount;
     _branchPortfolio = branchMap;
 
     if (disbursed > 0) {
       final totalPaid = _loans.fold<double>(0.0, (sum, l) => sum + l.paidTotal);
-      _recoveryRate = double.parse(((totalPaid / (totalPaid + _totalOverdue)) * 100).toStringAsFixed(1));
+      _recoveryRate = (totalPaid + _totalOverdue) > 0
+          ? double.parse(((totalPaid / (totalPaid + _totalOverdue)) * 100).toStringAsFixed(1))
+          : 100.0;
     }
   }
 
@@ -390,6 +401,12 @@ class LoanProvider extends ChangeNotifier {
     required String occupation,
     required int agentId,
     required String branch,
+    String employer = '',
+    String coName = '',
+    String coPhone = '',
+    String coRelation = '',
+    double coIncome = 0.0,
+    double incAgri = 0,
     double incBusiness = 0,
     double incJob = 0,
     double incOther = 0,
@@ -397,8 +414,16 @@ class LoanProvider extends ChangeNotifier {
     double expEducation = 0,
     double expFestival = 0,
     double expHealth = 0,
+    double expEmi = 0,
     double expOther = 0,
     List<String> docsDeposited = const [],
+    String docsOther = '',
+    String insuranceWanted = 'no',
+    String insuranceFor = 'self',
+    double groupRec = 0,
+    double centerRec = 0,
+    int loanCycle = 1,
+    int declaration = 1,
   }) async {
     try {
       final db = await DatabaseHelper.instance.database;
@@ -418,25 +443,31 @@ class LoanProvider extends ChangeNotifier {
         'purpose': purpose,
         'income': income,
         'occupation': occupation,
+        'employer': employer,
+        'co_name': coName,
+        'co_phone': coPhone,
+        'co_relation': coRelation,
+        'co_income': coIncome,
         'status': 'submitted',
         'agent_id': agentId,
         'branch': branch,
         'created': nowIso,
-        'docs': docsDeposited.toString(),
+        'remarks': '',
+        'docs': docsDeposited.join(','),
       });
 
-      final totalExp = expBasic + expEducation + expFestival + expHealth + expOther;
-      final totalInc = income + incBusiness + incJob + incOther;
+      final totalExp = expBasic + expEducation + expFestival + expHealth + expEmi + expOther;
+      final totalInc = incAgri + incBusiness + incJob + incOther > 0 ? (incAgri + incBusiness + incJob + incOther) : income;
       final netSav = totalInc - totalExp;
 
       await db.insert('app_extra', {
         'application_id': appId,
         'prev_loans': '[]',
-        'insurance_wanted': 'yes',
-        'insurance_for': 'husband',
-        'docs_deposited': docsDeposited.toString(),
-        'docs_other': '',
-        'inc_agri': 0.0,
+        'insurance_wanted': insuranceWanted,
+        'insurance_for': insuranceFor,
+        'docs_deposited': docsDeposited.join(','),
+        'docs_other': docsOther,
+        'inc_agri': incAgri,
         'inc_business': incBusiness,
         'inc_job': incJob,
         'inc_other': incOther,
@@ -444,16 +475,16 @@ class LoanProvider extends ChangeNotifier {
         'exp_education': expEducation,
         'exp_festival': expFestival,
         'exp_health': expHealth,
-        'exp_emi': 0.0,
+        'exp_emi': expEmi,
         'exp_other': expOther,
-        'group_rec': amount,
-        'center_rec': amount,
-        'loan_cycle': 1,
+        'group_rec': groupRec > 0 ? groupRec : amount,
+        'center_rec': centerRec > 0 ? centerRec : amount,
+        'loan_cycle': loanCycle,
         'requested_amt': amount,
         'income_total': totalInc,
         'expense_total': totalExp,
         'net_saving': netSav,
-        'declaration': 1,
+        'declaration': declaration,
       });
 
       await db.insert('approvals', {

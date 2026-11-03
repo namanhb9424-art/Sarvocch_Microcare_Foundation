@@ -791,5 +791,82 @@ class DemoSeedData {
       'status': 'connected',
       'last_synced': nowIso,
     });
+
+    // 16. Employee Leaves
+    final leaves = [
+      {
+        'id': 1,
+        'user_id': 4,
+        'from_d': today.add(const Duration(days: 4)).toIso8601String().substring(0, 10),
+        'to_d': today.add(const Duration(days: 6)).toIso8601String().substring(0, 10),
+        'reason': 'Family religious function & village visit',
+        'status': 'pending',
+      },
+      {
+        'id': 2,
+        'user_id': 5,
+        'from_d': today.subtract(const Duration(days: 15)).toIso8601String().substring(0, 10),
+        'to_d': today.subtract(const Duration(days: 13)).toIso8601String().substring(0, 10),
+        'reason': 'Viral fever & medical checkup',
+        'status': 'approved',
+      },
+      {
+        'id': 3,
+        'user_id': 6,
+        'from_d': today.subtract(const Duration(days: 28)).toIso8601String().substring(0, 10),
+        'to_d': today.subtract(const Duration(days: 27)).toIso8601String().substring(0, 10),
+        'reason': 'Personal administrative work',
+        'status': 'approved',
+      },
+    ];
+    for (var l in leaves) {
+      await db.insert('leaves', l);
+    }
+
+    // 17. Performance Evaluations
+    final perf = [
+      {
+        'id': 1,
+        'user_id': 4,
+        'period': 'Q3 2026',
+        'rating': 5,
+        'notes': 'Exceeded collection targets in Vijay Nagar. Excellent borrower relationships.',
+        'by_name': 'Meera Manager',
+      },
+      {
+        'id': 2,
+        'user_id': 5,
+        'period': 'Q3 2026',
+        'rating': 4,
+        'notes': 'Met disbursement quota for Palasia. Good documentation discipline.',
+        'by_name': 'Meera Manager',
+      },
+      {
+        'id': 3,
+        'user_id': 6,
+        'period': 'Q3 2026',
+        'rating': 4,
+        'notes': 'Fast KYC turnaround time in Bhopal MP Nagar.',
+        'by_name': 'Meera Manager',
+      },
+    ];
+    for (var p in perf) {
+      await db.insert('perf', p);
+    }
+
+    // 18. Official Public Holidays (for banking / schedule date calculation)
+    final holidays = [
+      {'day': '2026-01-26', 'name': 'Republic Day'},
+      {'day': '2026-03-04', 'name': 'Holi'},
+      {'day': '2026-04-14', 'name': 'Ambedkar Jayanti'},
+      {'day': '2026-08-15', 'name': 'Independence Day'},
+      {'day': '2026-10-02', 'name': 'Gandhi Jayanti'},
+      {'day': '2026-11-01', 'name': 'Madhya Pradesh Foundation Day'},
+      {'day': '2026-11-12', 'name': 'Diwali Deepawali'},
+      {'day': '2026-12-25', 'name': 'Christmas'},
+    ];
+    for (var h in holidays) {
+      await db.insert('holidays', h);
+    }
   }
 }

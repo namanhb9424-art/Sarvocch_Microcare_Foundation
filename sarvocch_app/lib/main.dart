@@ -28,6 +28,8 @@ import 'screens/login_screen.dart';
 import 'screens/portal/customer_portal_screen.dart';
 import 'screens/pregrt/pregrt_screen.dart';
 import 'screens/products/products_screen.dart';
+import 'screens/profile/profile_screen.dart';
+import 'screens/reports/reports_screen.dart';
 import 'screens/settings/admin_settings_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/whatsapp/whatsapp_screen.dart';
@@ -84,7 +86,12 @@ class SarvoocchApp extends StatelessWidget {
           '/hrm': (_) => const HrmScreen(),
           '/whatsapp': (_) => const WhatsAppScreen(),
           '/cloud-quotes': (_) => const CloudQuotationScreen(),
+          '/reports': (_) => const ReportsScreen(),
+          '/profile': (_) => const ProfileScreen(),
           '/settings': (_) => const AdminSettingsScreen(),
+          // Route aliases
+          '/kyc_form': (_) => const KycFormScreen(),
+          '/apply_loan': (_) => const ApplyLoanScreen(),
         },
       ),
     );

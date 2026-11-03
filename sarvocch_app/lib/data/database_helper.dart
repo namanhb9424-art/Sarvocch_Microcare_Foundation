@@ -27,6 +27,8 @@ class DatabaseHelper {
     String path;
     if (kIsWeb) {
       path = 'sarvocch.db';
+    } else if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      path = inMemoryDatabasePath;
     } else {
       try {
         final documentsDirectory = await getApplicationDocumentsDirectory();
@@ -38,9 +40,54 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS leaves (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          from_d TEXT,
+          to_d TEXT,
+          reason TEXT,
+          status TEXT DEFAULT 'pending'
+        );
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS perf (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          period TEXT,
+          rating INTEGER,
+          notes TEXT,
+          by_name TEXT
+        );
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS holidays (
+          day TEXT PRIMARY KEY,
+          name TEXT
+        );
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS sync_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          uuid TEXT UNIQUE,
+          user_id INTEGER,
+          payload TEXT,
+          captured_at TEXT,
+          synced_at TEXT
+        );
+      ''');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -447,6 +494,46 @@ class DatabaseHelper {
       );
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS leaves (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        from_d TEXT,
+        to_d TEXT,
+        reason TEXT,
+        status TEXT DEFAULT 'pending'
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS perf (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        period TEXT,
+        rating INTEGER,
+        notes TEXT,
+        by_name TEXT
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS holidays (
+        day TEXT PRIMARY KEY,
+        name TEXT
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE,
+        user_id INTEGER,
+        payload TEXT,
+        captured_at TEXT,
+        synced_at TEXT
+      );
+    ''');
+
     // Run Initial Demo Seeding
     await DemoSeedData.seedDatabase(db);
   }
@@ -457,11 +544,11 @@ class DatabaseHelper {
       'users', 'employees', 'customers', 'comm_logs', 'products', 'applications',
       'app_extra', 'approvals', 'loans', 'schedule', 'payments', 'mandates',
       'tasks', 'attendance', 'branches', 'att_requests', 'pregrt', 'pregrt_members',
-      'kyc_forms', 'settings', 'cloud_connections'
+      'kyc_forms', 'settings', 'cloud_connections', 'leaves', 'perf', 'holidays', 'sync_log'
     ];
     for (var table in tables) {
       await db.execute('DROP TABLE IF EXISTS $table');
     }
-    await _onCreate(db, 1);
+    await _onCreate(db, 2);
   }
 }

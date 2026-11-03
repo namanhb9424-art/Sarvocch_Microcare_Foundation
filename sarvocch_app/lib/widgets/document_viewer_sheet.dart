@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../services/pdf_service.dart';
 import '../theme/app_theme.dart';
 
 enum DocumentType { loanPassbook, loginSlip, kycDossier, preGrtCertificate }
@@ -55,12 +56,33 @@ class DocumentViewerSheet extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.download, color: AppTheme.tealPrimary),
-                  tooltip: 'Export Document',
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Document exported to device storage!'), backgroundColor: AppTheme.success),
-                    );
+                  tooltip: 'Export PDF Document',
+                  onPressed: () async {
+                    try {
+                      final bytes = type == DocumentType.loanPassbook
+                          ? await PdfService.generatePassbookCard(data: data)
+                          : type == DocumentType.preGrtCertificate
+                              ? await PdfService.generatePreGrtCertificate(data: data)
+                              : await PdfService.generateSanctionLetter(
+                                  loanId: '${data['id'] ?? "001"}',
+                                  customerName: data['customer_name'] ?? data['name'] ?? 'Sunita Verma',
+                                  customerId: '${data['customer_id'] ?? data['id'] ?? "001"}',
+                                  phone: (data['phone'] ?? '9876543210').toString(),
+                                  branch: (data['branch'] ?? 'Indore - Vijay Nagar').toString(),
+                                  amount: (data['principal'] ?? data['amount'] ?? 40000 as num).toDouble(),
+                                  rate: (data['rate'] ?? 18 as num).toDouble(),
+                                  tenure: ((data['tenure'] ?? 12) as num).toInt(),
+                                  emi: (data['emi'] ?? 3667 as num).toDouble(),
+                                  purpose: (data['purpose'] ?? 'Microenterprise expansion').toString(),
+                                  sanctionDate: (data['start_date'] ?? '2026-05-10').toString(),
+                                );
+                      await PdfService.printOrShareDocument(
+                        title: _getTitle().replaceAll(' ', '_').replaceAll('/', '_'),
+                        bytes: bytes,
+                      );
+                    } catch (e) {
+                      debugPrint('PDF export error: $e');
+                    }
                   },
                 ),
                 IconButton(
