@@ -6,7 +6,7 @@
 .photo{width:85px;height:100px;object-fit:cover;border:1px solid #999}.sign{height:45px;border-bottom:1px solid #444;margin-top:8px}
 @media print{.no-print{display:none!important}.sheet{padding:0}}</style></head><body><div class="sheet">
 <div class="no-print d-flex gap-2 mb-2"><button class="btn btn-sm btn-primary" onclick="window.print()">Print / Save as PDF</button><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('loan_detail', lid=loan['id']) }}">Back</a></div>
-<div class="d-flex justify-content-between"><div><h1 class="mb-0">Sarvocch Microcare Foundation</h1><div class="fw-bold">LOAN CARD / ऋण कार्ड</div></div>
+<div class="d-flex justify-content-between"><div><h1 class="mb-0">SARVOOCCH Microcare Foundation</h1><div class="fw-bold">LOAN CARD / ऋण कार्ड</div></div>
 {% if show_photo and kf and kf['photo'] %}<img class="photo" src="{{ url_for('uploaded', name=kf['photo']) }}" alt="photo">{% endif %}</div>
 <table class="table table-bordered table-sm my-2">
 <tr><td>Loan no.: <b>#{{ loan['id'] }}</b></td><td>Borrower: <b>{{ loan['cname'] }}</b></td><td>Mobile: <b>{{ loan['cphone'] }}</b></td></tr>
