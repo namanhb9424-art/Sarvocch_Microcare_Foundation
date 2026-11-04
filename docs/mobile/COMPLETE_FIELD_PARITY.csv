@@ -1,0 +1,72 @@
+Module,Screen,Field Identifier,Field Label,Data Type,Input Widget,Required,Validation / Constraints,Default / Value,Backend DB Column,Mobile Status,Parity Notes
+Auth,Login,username,Username,string,TextFormField,true,Non-empty,admin,users.username,VERIFIED,Trimmed string input
+Auth,Login,password,Password,string,TextFormField(obscure),true,Non-empty,admin123,users.pw,VERIFIED,Password visibility toggle supported
+Dashboard,Dashboard,kpi_disbursed,Total Disbursed,currency,KpiCard,true,Positive numeric,₹0,loans.principal sum,VERIFIED,Aggregated live from active & closed loans
+Dashboard,Dashboard,kpi_outstanding,Outstanding Bal,currency,KpiCard,true,Positive numeric,₹0,schedule.principal sum,VERIFIED,Aggregated live from unpaid installments
+Dashboard,Dashboard,kpi_overdue,Overdue Amount,currency,KpiCard,true,Positive numeric,₹0,schedule.emi overdue sum,IN_PROGRESS,Replacing temporary hardcoded 5200.0 with dynamic query
+Dashboard,Dashboard,kpi_recovery,Recovery Rate,percentage,KpiCard,true,0 to 100%,0.0%,derived calculation,VERIFIED,Formula: Paid / (Paid + Overdue) * 100
+CRM,Lead Form,name,Full Name,string,TextFormField,true,Min 2 chars,None,customers.name,VERIFIED,Customer lead name
+CRM,Lead Form,phone,Phone Number,string,TextFormField(phone),true,10 digit Indian mobile,None,customers.phone,VERIFIED,Input keyboard set to phone
+CRM,Lead Form,dob,Date of Birth,string,DatePicker / Text,false,YYYY-MM-DD,None,customers.dob,VERIFIED,Date picker formatting
+CRM,Lead Form,address,Residential Address,string,TextFormField,true,Non-empty,None,customers.address,VERIFIED,Full street and locality address
+CRM,Lead Form,branch,Branch Office,string,DropdownButtonFormField,true,Must match branch list,First branch,customers.branch,VERIFIED,Options loaded dynamically from branches
+KYC,Bilingual KYC,customer_id,Select Customer Lead,integer,DropdownButtonFormField,true,Valid customer ID,First customer,kyc_forms.customer_id,VERIFIED,Links to existing customer lead
+KYC,Bilingual KYC,center_no,Center No (केंद्र संख्या),string,TextFormField,true,Alphanumeric,C-101,kyc_forms.center_no,VERIFIED,MFI center identifier
+KYC,Bilingual KYC,group_no,Group Code (समूह संख्या),string,TextFormField,true,Alphanumeric,G-A,kyc_forms.group_no,VERIFIED,JLG group identifier
+KYC,Bilingual KYC,guardian_type,Guardian Type (अभिभावक प्रकार),string,DropdownButtonFormField,true,husband/father/mother/self,husband,kyc_forms.guardian_type,IN_PROGRESS,Upgrading to strict dropdown selector
+KYC,Bilingual KYC,guardian_name,Guardian Name (अभिभावक का नाम),string,TextFormField,true,Non-empty,None,kyc_forms.guardian_name,VERIFIED,Full legal name
+KYC,Bilingual KYC,education,Education (शिक्षा),string,DropdownButtonFormField,true,Primary/Middle/Secondary/Higher,Secondary (10th),kyc_forms.education,VERIFIED,Literacy and educational qualification
+KYC,Bilingual KYC,religion,Religion (धर्म),string,DropdownButtonFormField,true,Hindu/Muslim/Christian/Sikh/Other,Hindu,kyc_forms.religion,VERIFIED,Demographic classification
+KYC,Bilingual KYC,category,Social Category (वर्ग),string,DropdownButtonFormField,true,General/OBC/SC/ST,OBC,kyc_forms.category,VERIFIED,RBI socio-economic reporting
+KYC,Bilingual KYC,house_no,House No (मकान संख्या),string,TextFormField,true,Non-empty,12,kyc_forms.house_no,IN_PROGRESS,Adding dedicated controller & validation
+KYC,Bilingual KYC,village,Village / Ward (गाँव / वार्ड),string,TextFormField,true,Non-empty,Vijay Nagar,kyc_forms.village,VERIFIED,Locality name
+KYC,Bilingual KYC,post_office,Post Office (डाकघर),string,TextFormField,true,Non-empty,Vijay Nagar PO,kyc_forms.post_office,IN_PROGRESS,Adding dedicated controller & validation
+KYC,Bilingual KYC,district,District (ज़िला),string,TextFormField,true,Non-empty,Indore,kyc_forms.district,VERIFIED,District administration
+KYC,Bilingual KYC,state,State (राज्य),string,TextFormField,true,Non-empty,Madhya Pradesh,kyc_forms.state,IN_PROGRESS,Adding dedicated controller & validation
+KYC,Bilingual KYC,pincode,PIN Code (पिन कोड),string,TextFormField(number),true,6 numeric digits,452010,kyc_forms.pincode,IN_PROGRESS,Adding 6-digit regex validation
+KYC,Bilingual KYC,house_type,House Type (मकान प्रकार),string,DropdownButtonFormField,true,pucca/semi_pucca/kutcha,pucca,kyc_forms.house_type,VERIFIED,Dwelling physical condition
+KYC,Bilingual KYC,land_ha,Land Holding (भूमि हेक्टेयर),double,TextFormField(decimal),false,>= 0,0.0,kyc_forms.land_ha,IN_PROGRESS,Adding decimal keyboard & validation
+KYC,Bilingual KYC,livestock,Livestock (पशुधन),string,TextFormField,false,Free text,1 cow, 2 goats,kyc_forms.livestock,IN_PROGRESS,Adding dedicated controller
+KYC,Bilingual KYC,bank_name,Bank Name (बैंक का नाम),string,TextFormField,true,Non-empty,State Bank of India,kyc_forms.bank_name,VERIFIED,Financial institution
+KYC,Bilingual KYC,bank_acct,Account Number (खाता संख्या),string,TextFormField(number),true,9 to 18 digits,30123456780,kyc_forms.bank_acct,VERIFIED,Direct benefit / disbursal account
+KYC,Bilingual KYC,passbook_name,Name as per Passbook,string,TextFormField,true,Non-empty,Sunita Verma,kyc_forms.passbook_name,IN_PROGRESS,Adding name match validation
+KYC,Bilingual KYC,poverty_line,Poverty Status (गरीबी रेखा),string,DropdownButtonFormField,true,APL/BPL,APL,kyc_forms.poverty_line,VERIFIED,Economic strata
+KYC,Bilingual KYC,dist_center_m,Distance to Center (Meters),double,TextFormField(number),false,>= 0,300.0,kyc_forms.dist_center_m,IN_PROGRESS,Adding numeric field
+KYC,Bilingual KYC,dist_branch_km,Distance to Branch (KM),double,TextFormField(number),false,>= 0,4.5,kyc_forms.dist_branch_km,IN_PROGRESS,Adding numeric field
+KYC,Bilingual KYC,relative_in_center,Relative in Center?,string,DropdownButtonFormField,true,yes/no,no,kyc_forms.relative_in_center,IN_PROGRESS,Adding conflict-of-interest check
+KYC,Bilingual KYC,annual_income,Annual Household Income (₹),double,TextFormField(number),true,<= 300000,216000.0,kyc_forms.annual_income,VERIFIED,RBI MFI household income limit check
+KYC,Bilingual KYC,other_loans,Existing Loans Count,integer,TextFormField(number),false,>= 0,0,kyc_forms.other_loans,IN_PROGRESS,Adding indebtedness count
+KYC,Bilingual KYC,current_debt,Total Current Debt (₹),double,TextFormField(number),false,>= 0,0.0,kyc_forms.current_debt,IN_PROGRESS,Adding debt exposure field
+KYC,Bilingual KYC,repay_freq,Repayment Frequency,string,DropdownButtonFormField,true,monthly/weekly/biweekly,monthly,kyc_forms.repay_freq,IN_PROGRESS,Adding repayment cadence
+KYC,Bilingual KYC,photo,Applicant Photo,image_path,Camera / ImagePicker,true,Valid JPG/PNG,None,kyc_forms.photo,IN_PROGRESS,Integrating image_picker & base64 encoding
+KYC,Bilingual KYC,h_name,Husband / Co-Applicant Name,string,TextFormField,true,Non-empty,Ramesh Verma,kyc_forms.h_name,VERIFIED,Mandatory co-applicant under RBI JLG
+KYC,Bilingual KYC,h_father,Husband's Father Name,string,TextFormField,false,Free text,Suresh Verma,kyc_forms.h_father,VERIFIED,Paternal lineage
+KYC,Bilingual KYC,h_dob,Husband Date of Birth,string,DatePicker / Text,false,YYYY-MM-DD,1984-03-02,kyc_forms.h_dob,VERIFIED,Husband age validation
+KYC,Bilingual KYC,h_photo,Husband / Co-Applicant Photo,image_path,Camera / ImagePicker,false,Valid JPG/PNG,None,kyc_forms.h_photo,IN_PROGRESS,Integrating image_picker
+KYC,Bilingual KYC,consent_given,Husband Written Consent,boolean,CheckboxListTile,true,Must be checked (true),true,kyc_forms.consent_given,VERIFIED,RBI JLG liability consent
+KYC,Bilingual KYC,address_verified,Physical Residence Visited,boolean,CheckboxListTile,true,Must be checked (true),true,kyc_forms.address_verified,VERIFIED,Field officer physical verification sign-off
+KYC,Bilingual KYC,declaration,Applicant Self Declaration,boolean,CheckboxListTile,true,Must be checked (true),true,kyc_forms.declaration,VERIFIED,Legal declaration & bureau authorization
+KYC,Bilingual KYC,bureau_consent,Credit Bureau Consent,boolean,CheckboxListTile,true,Must be checked (true),true,kyc_forms.bureau_consent,VERIFIED,Credit check consent
+KYC,Bilingual KYC,family,Family Members JSON Table,json_array,Dynamic Table Widget,false,Valid JSON array,[],kyc_forms.family,IN_PROGRESS,Adding dynamic family member rows
+Loan,Application,product_id,Loan Product,integer,DropdownButtonFormField,true,Active product ID,1,applications.product_id,VERIFIED,Selects Micro Business / Income Gen / Emergency
+Loan,Application,amount,Requested Amount (₹),double,TextFormField(number),true,Between min_amt and max_amt,20000.0,applications.amount,VERIFIED,Validates against product bounds
+Loan,Application,tenure,Tenure (Months),integer,TextFormField(number),true,Between min_tenure and max_tenure,12,applications.tenure,VERIFIED,Validates against product bounds
+Loan,Application,purpose,Loan Purpose,string,TextFormField,true,Non-empty,Tailoring & trade,applications.purpose,VERIFIED,Income generation purpose
+Loan,Application,income,Applicant Monthly Income (₹),double,TextFormField(number),true,> 0,15000.0,applications.income,VERIFIED,Used for EMI capacity appraisal
+Loan,Application,occupation,Occupation,string,TextFormField,true,Non-empty,Shop Owner,applications.occupation,VERIFIED,Employment profile
+Loan,Application,employer,Employer / Business Name,string,TextFormField,false,Free text,Self-Employed,applications.employer,IN_PROGRESS,Adding employer input field
+Loan,Application,co_name,Co-Borrower Name,string,TextFormField,false,Free text,Ramesh Verma,applications.co_name,IN_PROGRESS,Adding co-borrower input field
+Loan,Application,co_phone,Co-Borrower Phone,string,TextFormField(phone),false,10 digits,9899999999,applications.co_phone,IN_PROGRESS,Adding co-borrower phone field
+Loan,Application,co_relation,Co-Borrower Relation,string,DropdownButtonFormField,false,Spouse/Parent/Sibling/Child,Spouse,applications.co_relation,IN_PROGRESS,Adding relation dropdown
+Loan,Application,co_income,Co-Borrower Monthly Income (₹),double,TextFormField(number),false,>= 0,10000.0,applications.co_income,IN_PROGRESS,Adding co-borrower income
+Loan,Application,inc_business,Business Income (₹),double,TextFormField(number),false,>= 0,15000.0,app_extra.inc_business,IN_PROGRESS,Adding cashflow breakdown field
+Loan,Application,inc_agri,Agricultural Income (₹),double,TextFormField(number),false,>= 0,0.0,app_extra.inc_agri,IN_PROGRESS,Adding cashflow breakdown field
+Loan,Application,inc_job,Salaried Job Income (₹),double,TextFormField(number),false,>= 0,0.0,app_extra.inc_job,IN_PROGRESS,Adding cashflow breakdown field
+Loan,Application,inc_other,Other Income (₹),double,TextFormField(number),false,>= 0,2000.0,app_extra.inc_other,IN_PROGRESS,Adding cashflow breakdown field
+Loan,Application,exp_basic,Food & Basic Living Expenses,double,TextFormField(number),false,>= 0,6000.0,app_extra.exp_basic,IN_PROGRESS,Adding expense breakdown field
+Loan,Application,exp_education,Education Expenses,double,TextFormField(number),false,>= 0,1500.0,app_extra.exp_education,IN_PROGRESS,Adding expense breakdown field
+Loan,Application,exp_emi,Existing Loan EMIs,double,TextFormField(number),false,>= 0,0.0,app_extra.exp_emi,IN_PROGRESS,Adding existing debt burden field
+Loan,Application,insurance_wanted,Credit Life Insurance Wanted,boolean,DropdownButtonFormField,true,yes/no,yes,app_extra.insurance_wanted,IN_PROGRESS,Adding insurance selection
+Loan,Application,docs_deposited,Checklist of Documents Deposited,list_of_strings,FilterChip / MultiSelect,true,Min 2 documents,["aadhaar", "voter"],app_extra.docs_deposited,IN_PROGRESS,Adding multi-document chip selector
+Loan,Application,declaration,Formal Loan Declaration,boolean,CheckboxListTile,true,Must be true,true,app_extra.declaration,IN_PROGRESS,Adding borrower declaration confirmation
+

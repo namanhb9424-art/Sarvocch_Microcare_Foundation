@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/location_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/custom_drawer.dart';
@@ -14,10 +15,8 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
-  // Demo coordinates around Indore Vijay Nagar branch (22.7533, 75.8937)
-  double _mockLat = 22.7510;
-  double _mockLng = 75.8900;
   String _selectedBranch = 'Indore - Vijay Nagar';
+  bool _isLocating = false;
 
   @override
   void initState() {
@@ -25,6 +24,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final auth = context.read<AuthProvider>();
     final user = auth.currentUser;
     if (user != null) {
+      if (user.branch.isNotEmpty) {
+        _selectedBranch = user.branch;
+      }
       context.read<AttendanceProvider>().fetchAttendanceData(user.id);
     }
   }
@@ -34,11 +36,30 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final user = auth.currentUser;
     if (user == null) return;
 
+    setState(() => _isLocating = true);
+
+    final locResult = await LocationService.instance.getCurrentCoordinates();
+
+    if (!mounted) return;
+    setState(() {
+      _isLocating = false;
+    });
+
+    if (locResult.errorMessage != null && !locResult.isRealGps) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(locResult.errorMessage!),
+          backgroundColor: Colors.blueGrey,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+
     final result = await context.read<AttendanceProvider>().punchIn(
           userId: user.id,
           branchName: _selectedBranch,
-          currentLat: _mockLat,
-          currentLng: _mockLng,
+          currentLat: locResult.latitude,
+          currentLng: locResult.longitude,
         );
 
     if (!mounted) return;
@@ -46,13 +67,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (result['success'] == true) {
       final isWithin = result['within_radius'] as bool;
       final dist = result['distance'] as int;
+      final gpsTag = locResult.isRealGps ? ' [Hardware GPS]' : ' [Reference GPS]';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             isWithin
-                ? 'Punch-In Successful! Distance: ${dist}m (Within ${result['radius_m']}m branch geofence)'
-                : 'Warning: Punched from ${dist}m away from $_selectedBranch.',
+                ? 'Punch-In Successful!$gpsTag Distance: ${dist}m (Within ${result['radius_m']}m branch geofence)'
+                : 'Warning:$gpsTag Punched from ${dist}m away from $_selectedBranch.',
           ),
           backgroundColor: isWithin ? AppTheme.success : Colors.orange,
         ),
@@ -250,12 +272,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            icon: const Icon(Icons.touch_app, size: 18),
-                            label: const Text('Punch In (2000m Check)'),
+                            icon: _isLocating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.touch_app, size: 18),
+                            label: Text(_isLocating ? 'Acquiring GPS...' : 'Punch In (2000m Check)'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: today?.inTime != null ? Colors.grey : AppTheme.tealPrimary,
+                              backgroundColor: (today?.inTime != null || _isLocating) ? Colors.grey : AppTheme.tealPrimary,
                             ),
-                            onPressed: today?.inTime != null ? null : _handlePunchIn,
+                            onPressed: (today?.inTime != null || _isLocating) ? null : _handlePunchIn,
                           ),
                         ),
                         const SizedBox(width: 10),

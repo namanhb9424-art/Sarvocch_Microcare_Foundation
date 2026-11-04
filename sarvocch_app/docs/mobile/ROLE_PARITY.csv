@@ -1,0 +1,7 @@
+Role Code,Role Label,Persona Example,Authorized Screens & Modules,Restricted Modules,Mobile Authorization Mechanism,Parity Status
+admin,Administrator,Aarav Admin,"dashboard, crm, kyc, apply, applications, approve, disburse, loans, payments, field, attendance, branches, products, hrm, whatsapp, settings, cloud-quotes, calculator, reports",None,UserModel.can(module) returns true,VERIFIED
+manager,Branch Manager,Meera Manager,"dashboard, crm, kyc, apply, applications, approve, disburse, loans, payments, field, attendance, branches, products, hrm, whatsapp, pregrt, calculator, reports","settings, cloud-quotes",UserModel.can(module) checked in Drawer & Screens,VERIFIED
+underwriter,Credit Underwriter,Uday Underwriter,"dashboard, crm, kyc, applications, approve, loans, calculator, pregrt, attendance","apply, disburse, field, branches, hrm, settings, cloud-quotes",UserModel.can(module) restricted to credit analysis & approval,VERIFIED
+field_agent,Field Officer / PSO,Ravi / Sneha / Imran,"crm, kyc, apply, applications, field, attendance, whatsapp, payments, kycform, pregrt, calculator","dashboard, approve, disburse, branches, hrm, settings, cloud-quotes, reports",UserModel.can(module) restricted to field & origination operations,VERIFIED
+customer,Borrower / Customer,Sunita Verma,"portal, payments, calculator","dashboard, crm, kyc, apply, applications, field, attendance, branches, products, hrm, settings",Automatic redirect to /portal; scoped strictly to borrower loan data,VERIFIED
+

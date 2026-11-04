@@ -14,6 +14,7 @@ class AppTheme {
   static const Color cardSurface = Colors.white;
   static const Color border = Color(0xFFE5E7EB);
   static const Color divider = Color(0xFFE5E7EB);
+  static const Color navyDark = Color(0xFF0F172A);
 
   // Typography Colors
   static const Color textPrimary = Color(0xFF111827);

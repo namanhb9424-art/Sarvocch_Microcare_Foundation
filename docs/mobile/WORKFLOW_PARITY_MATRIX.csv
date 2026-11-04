@@ -1,0 +1,9 @@
+Workflow ID,Workflow Name,Website Route Flow,Mobile Screen Flow,Initiator Roles,Preconditions,Backend Actions,Mobile Parity Status
+WF-01,Borrower Origination & KYC,/crm -> /crm/<cid>/kyc-form -> /crm/<cid>/kyc-form/print,CrmListScreen -> KycFormScreen -> DocumentViewerSheet,Admin / Manager / Field Agent,Lead created in CRM,"POST /crm/new, POST /crm/<cid>/kyc-form",VERIFIED
+WF-02,Pre-GRT Group Batch Approval,/pregrt -> /pregrt/new -> /pregrt/<pid>/apply,PreGrtScreen -> GroupApplyScreen,Branch Manager / Field Agent,2-5 Verified Group Members,"POST /pregrt/new, POST /pregrt/<pid>/review",VERIFIED
+WF-03,Underwriter Credit Sanction,/applications -> /applications/<aid> -> /applications/<aid>/action,ApplicationsScreen -> ApplicationDetailScreen,Underwriter / Manager,Submitted application with KYC,"POST /applications/<aid>/action (approve/reject)",VERIFIED
+WF-04,Branch Loan Disbursement,/applications/<aid> -> /loans/<lid> -> /loans/<lid>/card,ApplicationDetailScreen -> LoanDetailScreen -> DocumentViewerSheet,Branch Manager / Admin,Sanctioned loan application,"POST /applications/<aid>/action (disburse)",VERIFIED
+WF-05,Field Repayment Collection,/field -> /field/task/<tid>/done -> /pay/<lid>,FieldTasksScreen -> DocumentViewerSheet (Receipt),Field Officer / PSO,Open field collection task,"POST /field/task/<tid>/done, POST /pay/<lid>",VERIFIED
+WF-06,Customer Self-Service UPI Pay,/portal -> /pay/<lid>,CustomerPortalScreen -> DocumentViewerSheet,Customer,Active disbursed loan,"POST /pay/<lid>",VERIFIED
+WF-07,Loan Pre-Closure Settlement,/loans/<lid> -> /loans/<lid>/settle -> /loans/<lid>/noc.pdf,LoanDetailScreen -> DocumentViewerSheet (NOC),Branch Manager / Admin,Loan with remaining balance,"POST /loans/<lid>/settle",VERIFIED
+WF-08,Attendance Geo-Fenced Punch,/attendance -> /attendance/punch,AttendanceScreen,All Staff,Within branch geofence,"POST /attendance/punch",VERIFIED

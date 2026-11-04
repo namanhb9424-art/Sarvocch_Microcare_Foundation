@@ -1,30 +1,51 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:sarvocch_app/main.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sarvocch_app/data/database_helper.dart';
+import 'package:sarvocch_app/providers/auth_provider.dart';
+import 'package:sarvocch_app/providers/loan_provider.dart';
+import 'package:sarvocch_app/providers/customer_provider.dart';
+import 'package:sarvocch_app/providers/pregrt_provider.dart';
+import 'package:sarvocch_app/providers/attendance_provider.dart';
+import 'package:sarvocch_app/providers/cloud_quote_provider.dart';
+import 'package:sarvocch_app/screens/login_screen.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const SarvoocchApp());
+  setUpAll(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('LoginScreen Smoke & Demo Accounts Test', (WidgetTester tester) async {
+    final authProvider = AuthProvider();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.runAsync(() async {
+      await DatabaseHelper.instance.resetDatabase();
+      await authProvider.init();
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: authProvider),
+          ChangeNotifierProvider(create: (_) => LoanProvider()),
+          ChangeNotifierProvider(create: (_) => CustomerProvider()),
+          ChangeNotifierProvider(create: (_) => PreGrtProvider()),
+          ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+          ChangeNotifierProvider(create: (_) => CloudQuoteProvider()),
+        ],
+        child: const MaterialApp(
+          home: LoginScreen(),
+        ),
+      ),
+    );
+
+    expect(find.text('Sign In to Portal'), findsOneWidget);
+    expect(find.text('Instant 1-Click Demo Accounts'), findsOneWidget);
+    expect(find.text('Admin (Aarav)'), findsOneWidget);
+    expect(find.text('Manager (Meera)'), findsOneWidget);
   });
 }

@@ -94,26 +94,28 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'SARVOOCCH Microcare',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.textPrimary,
+                      const Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SARVOOCCH Microcare',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimary,
+                              ),
                             ),
-                          ),
-                          Text(
-                            'Foundation • Micro Finance Portal',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                              fontWeight: FontWeight.w500,
+                            Text(
+                              'Foundation • Micro Finance Portal',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -226,12 +228,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               Icon(Icons.bolt, color: AppTheme.tealPrimary, size: 18),
                               SizedBox(width: 6),
-                              Text(
-                                'Instant 1-Click Demo Accounts',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.tealPrimary,
+                              Flexible(
+                                child: Text(
+                                  'Instant 1-Click Demo Accounts',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.tealPrimary,
+                                  ),
                                 ),
                               ),
                             ],

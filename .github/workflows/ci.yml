@@ -68,4 +68,4 @@ jobs:
 
       - name: Run User Flow Integration Tests
         working-directory: sarvocch_app
-        run: flutter test test/user_flows_test.dart
+        run: flutter test test/user_flows_test.dart test/comprehensive_parity_test.dart
