@@ -34,7 +34,7 @@ class ShimmerLoading extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: count,
-      itemBuilder: (_, __) => Padding(
+      itemBuilder: (_, _) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: ShimmerLoading(
           width: double.infinity,
@@ -55,7 +55,8 @@ class ShimmerLoading extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       children: List.generate(
         4,
-        (_) => const ShimmerLoading(width: double.infinity, height: 95, borderRadius: 10),
+        (_) => const ShimmerLoading(
+            width: double.infinity, height: 95, borderRadius: 10),
       ),
     );
   }

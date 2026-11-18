@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class LocationResult {
-  final double latitude;
-  final double longitude;
+  final double? latitude;
+  final double? longitude;
   final bool isRealGps;
   final String? errorMessage;
 
@@ -19,20 +19,17 @@ class LocationService {
   static final LocationService instance = LocationService._internal();
   LocationService._internal();
 
-  /// Default benchmark branch coordinates for desktop development & unit testing
-  static const double fallbackLat = 22.7533;
-  static const double fallbackLng = 75.8937;
-
   Future<LocationResult> getCurrentCoordinates() async {
-    // Desktop platforms or test runners without native location platform channels
-    if (kIsWeb || defaultTargetPlatform == TargetPlatform.macOS || 
-        defaultTargetPlatform == TargetPlatform.windows || 
+    // Desktop platforms and browsers cannot provide production attendance GPS.
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.linux) {
       return LocationResult(
-        latitude: fallbackLat,
-        longitude: fallbackLng,
+        latitude: null,
+        longitude: null,
         isRealGps: false,
-        errorMessage: 'Desktop environment: using reference branch GPS coordinates.',
+        errorMessage: 'Live device GPS is unavailable on this platform. Attendance was not recorded.',
       );
     }
 
@@ -40,8 +37,8 @@ class LocationService {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         return LocationResult(
-          latitude: fallbackLat,
-          longitude: fallbackLng,
+          latitude: null,
+          longitude: null,
           isRealGps: false,
           errorMessage: 'Device location services are disabled. Please enable GPS in device settings.',
         );
@@ -52,8 +49,8 @@ class LocationService {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           return LocationResult(
-            latitude: fallbackLat,
-            longitude: fallbackLng,
+            latitude: null,
+            longitude: null,
             isRealGps: false,
             errorMessage: 'Location permission denied by user.',
           );
@@ -62,8 +59,8 @@ class LocationService {
 
       if (permission == LocationPermission.deniedForever) {
         return LocationResult(
-          latitude: fallbackLat,
-          longitude: fallbackLng,
+          latitude: null,
+          longitude: null,
           isRealGps: false,
           errorMessage: 'Location permissions are permanently denied. Please enable via Android App Settings.',
         );
@@ -81,15 +78,14 @@ class LocationService {
         longitude: position.longitude,
         isRealGps: true,
       );
-    } catch (e) {
-      debugPrint('Location acquisition error: $e');
+    } catch (_) {
+      debugPrint('Device location could not be acquired.');
       return LocationResult(
-        latitude: fallbackLat,
-        longitude: fallbackLng,
+        latitude: null,
+        longitude: null,
         isRealGps: false,
-        errorMessage: 'Error acquiring device GPS: $e',
+        errorMessage: 'Error acquiring device GPS.',
       );
     }
   }
 }
-

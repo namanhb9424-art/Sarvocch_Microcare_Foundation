@@ -9,7 +9,6 @@ import 'package:sarvocch_app/providers/loan_provider.dart';
 import 'package:sarvocch_app/providers/customer_provider.dart';
 import 'package:sarvocch_app/providers/pregrt_provider.dart';
 import 'package:sarvocch_app/providers/attendance_provider.dart';
-import 'package:sarvocch_app/providers/cloud_quote_provider.dart';
 import 'package:sarvocch_app/screens/login_screen.dart';
 
 void main() {
@@ -35,7 +34,6 @@ void main() {
           ChangeNotifierProvider(create: (_) => CustomerProvider()),
           ChangeNotifierProvider(create: (_) => PreGrtProvider()),
           ChangeNotifierProvider(create: (_) => AttendanceProvider()),
-          ChangeNotifierProvider(create: (_) => CloudQuoteProvider()),
         ],
         child: const MaterialApp(
           home: LoginScreen(),
@@ -44,8 +42,7 @@ void main() {
     );
 
     expect(find.text('Sign In to Portal'), findsOneWidget);
-    expect(find.text('Instant 1-Click Demo Accounts'), findsOneWidget);
-    expect(find.text('Admin (Aarav)'), findsOneWidget);
-    expect(find.text('Manager (Meera)'), findsOneWidget);
+    expect(find.text('Enter your account credentials to continue'), findsOneWidget);
+    expect(find.text('Sarvoocch Saathi'), findsOneWidget);
   });
 }

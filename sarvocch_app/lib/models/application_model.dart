@@ -1,7 +1,10 @@
+import '../services/currency_amount.dart';
+
 class ApprovalLogModel {
   final int id;
   final int applicationId;
-  final String stage; // Submitted, Under Review, Approved, Sanctioned, Disbursed, Rejected
+  final String
+  stage; // Submitted, Under Review, Approved, Sanctioned, Disbursed, Rejected
   final String byUser;
   final String byRole;
   final double amount;
@@ -26,7 +29,7 @@ class ApprovalLogModel {
       stage: map['stage'] as String,
       byUser: (map['by_user'] ?? '') as String,
       byRole: (map['by_role'] ?? '') as String,
-      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+      amount: CurrencyAmount.readStoredValue(map, 'amount_paise', 'amount'),
       remarks: (map['remarks'] ?? '') as String,
       at: (map['at'] ?? '') as String,
     );
@@ -48,7 +51,8 @@ class ApplicationModel {
   final String? coPhone;
   final String? coRelation;
   final double? coIncome;
-  final String status; // submitted, under_review, approved, sanctioned, disbursed, rejected
+  final String
+  status; // submitted, under_review, approved, sanctioned, disbursed, rejected
   final int agentId;
   final String branch;
   final String created;
@@ -101,19 +105,21 @@ class ApplicationModel {
       id: map['id'] as int,
       customerId: map['customer_id'] as int,
       productId: map['product_id'] as int,
-      amount: (map['amount'] as num).toDouble(),
+      amount: CurrencyAmount.readStoredValue(map, 'amount_paise', 'amount'),
       tenure: map['tenure'] as int,
       rate: (map['rate'] as num).toDouble(),
       purpose: (map['purpose'] ?? '') as String,
-      income: (map['income'] as num?)?.toDouble() ?? 0.0,
+      income: CurrencyAmount.readStoredValue(map, 'income_paise', 'income'),
       occupation: (map['occupation'] ?? '') as String,
       employer: map['employer'] as String?,
       coName: map['co_name'] as String?,
       coPhone: map['co_phone'] as String?,
       coRelation: map['co_relation'] as String?,
-      coIncome: (map['co_income'] as num?)?.toDouble(),
+      coIncome: map['co_income_paise'] is num
+          ? CurrencyAmount.readStoredValue(map, 'co_income_paise', 'co_income')
+          : (map['co_income'] as num?)?.toDouble(),
       status: (map['status'] ?? 'submitted') as String,
-      agentId: (map['agent_id'] as int?) ?? 1,
+      agentId: (map['agent_id'] as int?) ?? 0,
       branch: (map['branch'] ?? '') as String,
       created: (map['created'] ?? '') as String,
       remarks: map['remarks'] as String?,
@@ -121,9 +127,29 @@ class ApplicationModel {
       customerName: map['customer_name'] as String?,
       customerPhone: map['customer_phone'] as String?,
       productName: map['product_name'] as String?,
-      incomeTotal: (map['income_total'] as num?)?.toDouble(),
-      expenseTotal: (map['expense_total'] as num?)?.toDouble(),
-      netSaving: (map['net_saving'] as num?)?.toDouble(),
+      incomeTotal:
+          map['income_total_paise'] is num || map['income_total'] is num
+          ? CurrencyAmount.readStoredValue(
+              map,
+              'income_total_paise',
+              'income_total',
+            )
+          : null,
+      expenseTotal:
+          map['expense_total_paise'] is num || map['expense_total'] is num
+          ? CurrencyAmount.readStoredValue(
+              map,
+              'expense_total_paise',
+              'expense_total',
+            )
+          : null,
+      netSaving: map['net_saving_paise'] is num || map['net_saving'] is num
+          ? CurrencyAmount.readStoredValue(
+              map,
+              'net_saving_paise',
+              'net_saving',
+            )
+          : null,
       emiEstimated: (map['emi_estimated'] as num?)?.toDouble(),
     );
   }

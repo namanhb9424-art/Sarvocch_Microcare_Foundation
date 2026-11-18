@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+
 import '../../models/application_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/loan_provider.dart';
@@ -13,11 +14,16 @@ class ApplicationDetailScreen extends StatefulWidget {
   const ApplicationDetailScreen({super.key, required this.application});
 
   @override
-  State<ApplicationDetailScreen> createState() => _ApplicationDetailScreenState();
+  State<ApplicationDetailScreen> createState() =>
+      _ApplicationDetailScreenState();
 }
 
 class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
-  final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final currency = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
   List<ApprovalLogModel> _timeline = [];
   bool _loadingTimeline = true;
   late ApplicationModel _app;
@@ -30,7 +36,12 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   }
 
   Future<void> _loadTimeline() async {
-    final logs = await context.read<LoanProvider>().getApprovalTimeline(_app.id);
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) return;
+    final logs = await context.read<LoanProvider>().getApprovalTimeline(
+      _app.id,
+      actorUserId: user.id,
+    );
     if (mounted) {
       setState(() {
         _timeline = logs;
@@ -40,39 +51,41 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   }
 
   Future<void> _advanceStageDialog(String targetStage) async {
-    final amountCtrl = TextEditingController(text: _app.amount.toStringAsFixed(0));
+    final amountCtrl = TextEditingController(
+      text: _app.amount.toStringAsFixed(0),
+    );
     final remarksCtrl = TextEditingController();
+    final payoutReferenceCtrl = TextEditingController();
+    var payoutChannel = '';
 
     String title;
     switch (targetStage) {
       case 'under_review':
         title = 'Move to Under Review';
-        remarksCtrl.text = 'KYC, bureau score, and address verified';
         break;
       case 'approved':
         title = 'Approve Application (Adjust Sanction Amount)';
-        remarksCtrl.text = 'Approved within borrower repaying capacity';
         break;
       case 'sanctioned':
-        title = 'Issue Sanction Letter';
-        remarksCtrl.text = 'Sanction approved & eNACH mandate recorded';
+        title = 'Record Sanction Decision';
         break;
       case 'disbursed':
-        title = 'Disburse Loan to Bank Account';
-        remarksCtrl.text = 'Transferred via IMPS/NEFT to borrower SBI account';
+        title = 'Record Loan Disbursement';
         break;
       case 'rejected':
         title = 'Reject Application';
-        remarksCtrl.text = 'Failed bureau checks or debt capacity limit';
         break;
       default:
         title = 'Advance Application';
     }
 
-    showDialog(
+    final completed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -83,7 +96,47 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Sanctioned Amount (₹)',
-                    helperText: 'Approver may reduce amount as per repayment limit',
+                    helperText:
+                        'Approver may reduce amount as per repayment limit',
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (targetStage == 'disbursed') ...[
+                const Text(
+                  'Record the staff-confirmed payout. No bank or payment provider is connected.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                StatefulBuilder(
+                  builder: (context, setDialogState) =>
+                      DropdownButtonFormField<String>(
+                        value: payoutChannel,
+                        decoration: const InputDecoration(
+                          labelText: 'Payout channel *',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: '',
+                            child: Text('Select channel'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'bank_transfer',
+                            child: Text('Bank transfer'),
+                          ),
+                          DropdownMenuItem(value: 'imps', child: Text('IMPS')),
+                          DropdownMenuItem(value: 'neft', child: Text('NEFT')),
+                          DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                        ],
+                        onChanged: (value) =>
+                            setDialogState(() => payoutChannel = value ?? ''),
+                      ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: payoutReferenceCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Payout or receipt reference *',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -91,40 +144,44 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
               TextField(
                 controller: remarksCtrl,
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Approval Remarks / Reason *'),
+                decoration: const InputDecoration(
+                  labelText: 'Approval Remarks / Reason *',
+                ),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final auth = context.read<AuthProvider>();
               final user = auth.currentUser;
               final newAmt = double.tryParse(amountCtrl.text) ?? _app.amount;
 
-              await context.read<LoanProvider>().advanceApplication(
+              final success = await context
+                  .read<LoanProvider>()
+                  .advanceApplication(
                     applicationId: _app.id,
                     targetStage: targetStage,
-                    byUser: user?.name ?? 'Branch Manager',
-                    byRole: user?.role ?? 'manager',
+                    actorUserId: user?.id ?? 0,
                     sanctionedAmount: newAmt,
                     remarks: remarksCtrl.text.trim(),
+                    disbursementReference: payoutReferenceCtrl.text.trim(),
+                    disbursementChannel: payoutChannel,
                   );
 
-              if (ctx.mounted) Navigator.pop(ctx);
-
-              // Update local state
-              final updated = context.read<LoanProvider>().applications.firstWhere((a) => a.id == _app.id);
-              setState(() => _app = updated);
-              _loadTimeline();
-
-              if (mounted) {
+              if (success && ctx.mounted) Navigator.pop(ctx, true);
+              if (!success && ctx.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Application #APP-${_app.id} moved to ${targetStage.toUpperCase()}'),
-                    backgroundColor: AppTheme.success,
+                  const SnackBar(
+                    content: Text(
+                      'Application update was not recorded. Check role, branch, KYC and transition requirements.',
+                    ),
+                    backgroundColor: AppTheme.danger,
                   ),
                 );
               }
@@ -134,6 +191,27 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
         ],
       ),
     );
+    amountCtrl.dispose();
+    remarksCtrl.dispose();
+    payoutReferenceCtrl.dispose();
+    if (completed != true || !mounted) return;
+
+    final updated = context.read<LoanProvider>().applications.where(
+      (application) => application.id == _app.id,
+    );
+    if (updated.isEmpty) return;
+    setState(() => _app = updated.first);
+    await _loadTimeline();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Application #APP-${_app.id} moved to ${targetStage.toUpperCase()}',
+          ),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+    }
   }
 
   void _showSanctionLetter() {
@@ -155,40 +233,53 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Sanction Letter & Digital QR', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                  const Text(
+                    'Internal Application Reference',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ],
               ),
               const Divider(color: AppTheme.border),
               const SizedBox(height: 10),
               QrImageView(
-                data: 'https://sarvocch.demo/applications/${_app.id}/sanction.pdf',
+                data: 'SARVOCCH-APPLICATION-${_app.id}',
                 version: QrVersions.auto,
                 size: 160.0,
                 foregroundColor: AppTheme.tealPrimary,
               ),
               const SizedBox(height: 14),
               Text(
-                'SANCTION ID: SMF-SANCTION-${_app.id}-2026',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.tealPrimary),
+                'LOCAL APPLICATION ID: APP-${_app.id}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: AppTheme.tealPrimary,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
-                'Sanctioned Amount: ${currency.format(_app.amount)} for ${_app.customerName}',
-                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                'Recorded amount: ${currency.format(_app.amount)} for ${_app.customerName}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'This QR contains a local record identifier only. It is not a sanction letter or an externally verifiable approval.',
+                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.share, size: 18),
-                  label: const Text('Share Digital Sanction Letter'),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sanction Letter link copied to clipboard')),
-                    );
-                  },
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
                 ),
               ),
             ],
@@ -211,7 +302,7 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
           if (_app.status == 'sanctioned' || _app.status == 'disbursed')
             IconButton(
               icon: const Icon(Icons.qr_code),
-              tooltip: 'Sanction QR',
+              tooltip: 'Local application reference',
               onPressed: _showSanctionLetter,
             ),
         ],
@@ -235,15 +326,28 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(_app.customerName ?? 'Applicant',
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                            Text(
+                              _app.customerName ?? 'Applicant',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 18,
+                              ),
+                            ),
                             const SizedBox(height: 2),
-                            Text('Phone: ${_app.customerPhone ?? "N/A"} • ${_app.branch}',
-                                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                            Text(
+                              'Phone: ${_app.customerPhone ?? "N/A"} • ${_app.branch}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: _statusColor(_app.status).withOpacity(0.12),
                             borderRadius: BorderRadius.circular(6),
@@ -265,7 +369,12 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildStat('Sanction Amount', currency.format(_app.amount)),
+                        _buildStat(
+                          {'sanctioned', 'disbursed'}.contains(_app.status)
+                              ? 'Sanctioned Amount'
+                              : 'Requested Amount',
+                          currency.format(_app.amount),
+                        ),
                         _buildStat('Tenure', '${_app.tenure} Months'),
                         _buildStat('Interest Rate', '${_app.rate}% p.a.'),
                       ],
@@ -284,14 +393,33 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('FINANCIAL CASHFLOW & CAPACITY',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary)),
+                    const Text(
+                      'FINANCIAL CASHFLOW & CAPACITY',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     _detailRow('Occupation', _app.occupation),
                     _detailRow('Purpose', _app.purpose),
-                    _detailRow('Verified Household Income', currency.format(_app.incomeTotal ?? _app.income)),
-                    _detailRow('Monthly Household Expenses', currency.format(_app.expenseTotal ?? 15000)),
-                    _detailRow('Estimated Net Monthly Savings', currency.format(_app.netSaving ?? 15000)),
+                    _detailRow(
+                      'Verified Household Income',
+                      currency.format(_app.incomeTotal ?? _app.income),
+                    ),
+                    _detailRow(
+                      'Monthly Household Expenses',
+                      _app.expenseTotal == null
+                          ? 'Not recorded'
+                          : currency.format(_app.expenseTotal),
+                    ),
+                    _detailRow(
+                      'Estimated Net Monthly Savings',
+                      _app.netSaving == null
+                          ? 'Not recorded'
+                          : currency.format(_app.netSaving),
+                    ),
                   ],
                 ),
               ),
@@ -302,7 +430,11 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
             // Approval Chain Timeline
             const Text(
               'APPROVAL CHAIN & AUDIT LOG',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+              ),
             ),
             const SizedBox(height: 8),
 
@@ -323,17 +455,35 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                             backgroundColor: AppTheme.tealPrimary,
                             child: Text(
                               '${index + 1}',
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          title: Text(log.stage, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                          title: Text(
+                            log.stage,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
+                            ),
+                          ),
                           subtitle: Text(
                             'By ${log.byUser} (${log.byRole.toUpperCase()})\n${log.remarks.isNotEmpty ? log.remarks : "Standard workflow advancement"}',
-                            style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppTheme.textSecondary,
+                            ),
                           ),
                           trailing: Text(
-                            log.at.length > 10 ? log.at.substring(0, 10) : log.at,
-                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                            log.at.length > 10
+                                ? log.at.substring(0, 10)
+                                : log.at,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textMuted,
+                            ),
                           ),
                         ),
                       );
@@ -349,7 +499,8 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   Widget? _buildBottomActions(String role) {
     if (_app.status == 'disbursed' || _app.status == 'rejected') return null;
 
-    final canApprove = (role == 'admin' || role == 'manager' || role == 'underwriter');
+    final canApprove =
+        (role == 'admin' || role == 'manager' || role == 'underwriter');
     final canDisburse = (role == 'admin' || role == 'manager');
 
     return Container(
@@ -377,9 +528,14 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton(
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.danger)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppTheme.danger),
+                ),
                 onPressed: () => _advanceStageDialog('rejected'),
-                child: const Text('Reject', style: TextStyle(color: AppTheme.danger)),
+                child: const Text(
+                  'Reject',
+                  style: TextStyle(color: AppTheme.danger),
+                ),
               ),
             ),
           ],
@@ -394,8 +550,10 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
             Expanded(
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.send, size: 18),
-                label: const Text('Disburse Funds to Borrower'),
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
+                label: const Text('Record Disbursement'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.success,
+                ),
                 onPressed: () => _advanceStageDialog('disbursed'),
               ),
             ),
@@ -407,9 +565,19 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   Widget _buildStat(String label, String value) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+        ),
         const SizedBox(height: 3),
-        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.tealPrimary)),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.tealPrimary,
+          ),
+        ),
       ],
     );
   }
@@ -420,8 +588,14 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(
+            label,
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
         ],
       ),
     );

@@ -5,8 +5,8 @@ class BranchModel {
   final String address;
   final String phone;
   final String headName;
-  final double lat;
-  final double lng;
+  final double? lat;
+  final double? lng;
   final int radiusM;
   final int active;
 
@@ -31,9 +31,9 @@ class BranchModel {
       address: (map['address'] ?? '') as String,
       phone: (map['phone'] ?? '') as String,
       headName: (map['head_name'] ?? '') as String,
-      lat: (map['lat'] as num).toDouble(),
-      lng: (map['lng'] as num).toDouble(),
-      radiusM: (map['radius_m'] as int?) ?? 2000,
+      lat: (map['lat'] as num?)?.toDouble(),
+      lng: (map['lng'] as num?)?.toDouble(),
+      radiusM: (map['radius_m'] as num?)?.toInt() ?? 0,
       active: (map['active'] as int?) ?? 1,
     );
   }

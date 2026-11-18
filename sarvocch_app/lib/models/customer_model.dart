@@ -1,3 +1,5 @@
+import '../services/currency_amount.dart';
+
 class CommLogModel {
   final int id;
   final int customerId;
@@ -146,6 +148,16 @@ class CustomerModel {
     this.family,
   });
 
+  static String? _maskIdentifier(Object? value, {required int visibleSuffix}) {
+    final identifier = value?.toString().replaceAll(RegExp(r'\s+'), '');
+    if (identifier == null || identifier.isEmpty) return null;
+    if (identifier.length <= visibleSuffix) {
+      return '•' * identifier.length;
+    }
+    return '${'X' * (identifier.length - visibleSuffix)}'
+        '${identifier.substring(identifier.length - visibleSuffix)}';
+  }
+
   factory CustomerModel.fromMap(Map<String, dynamic> map) {
     return CustomerModel(
       id: map['id'] as int,
@@ -154,11 +166,13 @@ class CustomerModel {
       dob: (map['dob'] ?? '') as String,
       address: (map['address'] ?? '') as String,
       branch: (map['branch'] ?? '') as String,
-      agentId: (map['agent_id'] as int?) ?? 1,
+      agentId: (map['agent_id'] as int?) ?? 0,
       stage: (map['stage'] ?? 'lead') as String,
-      aadhaar: map['aadhaar'] as String?,
-      pan: map['pan'] as String?,
-      voter: map['voter'] as String?,
+      // Mask at the model boundary so legacy or imported full identifiers
+      // cannot be exposed by a screen that forgets to mask them.
+      aadhaar: _maskIdentifier(map['aadhaar'], visibleSuffix: 4),
+      pan: _maskIdentifier(map['pan'], visibleSuffix: 1),
+      voter: _maskIdentifier(map['voter'], visibleSuffix: 3),
       kycStatus: (map['kyc_status'] ?? 'pending') as String,
       waVerified: (map['wa_verified'] as int?) ?? 0,
       created: (map['created'] ?? '') as String,
@@ -180,9 +194,21 @@ class CustomerModel {
       distBranchKm: (map['dist_branch_km'] as num?)?.toDouble(),
       relativeInCenter: map['relative_in_center'] as String?,
       relativeName: map['relative_name'] as String?,
-      annualIncome: (map['annual_income'] as num?)?.toDouble(),
+      annualIncome: map['annual_income_paise'] is num
+          ? CurrencyAmount.readStoredValue(
+              map,
+              'annual_income_paise',
+              'annual_income',
+            )
+          : (map['annual_income'] as num?)?.toDouble(),
       otherLoans: map['other_loans'] as int?,
-      currentDebt: (map['current_debt'] as num?)?.toDouble(),
+      currentDebt: map['current_debt_paise'] is num
+          ? CurrencyAmount.readStoredValue(
+              map,
+              'current_debt_paise',
+              'current_debt',
+            )
+          : (map['current_debt'] as num?)?.toDouble(),
       repayFreq: map['repay_freq'] as String?,
       photo: map['photo'] as String?,
       husbandName: map['h_name'] as String?,
@@ -202,7 +228,9 @@ class CustomerModel {
       coName: map['co_name'] as String?,
       coPhone: map['co_phone'] as String?,
       coRelation: map['co_relation'] as String?,
-      coIncome: (map['co_income'] as num?)?.toDouble(),
+      coIncome: map['co_income_paise'] is num
+          ? CurrencyAmount.readStoredValue(map, 'co_income_paise', 'co_income')
+          : (map['co_income'] as num?)?.toDouble(),
       family: map['family'] as String?,
     );
   }

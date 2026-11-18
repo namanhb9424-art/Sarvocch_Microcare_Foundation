@@ -28,7 +28,11 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
   }
 
   Future<void> _loadLogs() async {
-    final list = await context.read<CustomerProvider>().getCommLogs(widget.customer.id);
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) return;
+    final list = await context
+        .read<CustomerProvider>()
+        .getCommLogs(widget.customer.id, actorUserId: user.id);
     if (mounted) {
       setState(() {
         _logs = list;
@@ -40,11 +44,13 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
   Future<void> _addLog() async {
     if (_noteCtrl.text.trim().isEmpty) return;
     final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
     await context.read<CustomerProvider>().addCommLog(
           customerId: widget.customer.id,
           channel: _channel,
           note: _noteCtrl.text.trim(),
-          byName: auth.currentUser?.name ?? 'Field Officer',
+          actorUserId: user.id,
         );
     _noteCtrl.clear();
     await _loadLogs();
@@ -52,7 +58,10 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.customer;
+    final customers = context.watch<CustomerProvider>().customers;
+    final currentCustomer =
+        customers.where((item) => item.id == widget.customer.id);
+    final c = currentCustomer.isEmpty ? widget.customer : currentCustomer.first;
 
     return Scaffold(
       appBar: AppBar(
@@ -61,16 +70,18 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
           IconButton(
             icon: const Icon(Icons.note_add_outlined),
             tooltip: 'Apply Loan',
-            onPressed: () => Navigator.pushNamed(context, '/apply', arguments: c.id),
+            onPressed: () =>
+                Navigator.pushNamed(context, '/apply', arguments: c.id),
           ),
           IconButton(
             icon: const Icon(Icons.badge_outlined),
             tooltip: 'KYC Form',
-            onPressed: () => Navigator.pushNamed(context, '/kyc-form', arguments: c.id),
+            onPressed: () =>
+                Navigator.pushNamed(context, '/kyc-form', arguments: c.id),
           ),
           IconButton(
-            icon: const Icon(Icons.print_outlined),
-            tooltip: 'Customer Login Slip',
+            icon: const Icon(Icons.receipt_long_outlined),
+            tooltip: 'Customer Summary',
             onPressed: () {
               DocumentViewerSheet.show(
                 context,
@@ -104,7 +115,10 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                           backgroundColor: AppTheme.tealSurface,
                           child: Text(
                             c.name.isNotEmpty ? c.name[0] : 'C',
-                            style: const TextStyle(color: AppTheme.tealPrimary, fontWeight: FontWeight.bold, fontSize: 22),
+                            style: const TextStyle(
+                                color: AppTheme.tealPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 22),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -112,12 +126,22 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                              Text(c.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 18)),
                               const SizedBox(height: 2),
-                              Text(c.phone, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                              Text(c.phone,
+                                  style: const TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 13)),
                               const SizedBox(height: 2),
-                              Text('${c.branch} • Stage: ${c.stage.toUpperCase()}',
-                                  style: const TextStyle(color: AppTheme.tealPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text(
+                                  '${c.branch} • Stage: ${c.stage.toUpperCase()}',
+                                  style: const TextStyle(
+                                      color: AppTheme.tealPrimary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -131,7 +155,8 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                       children: [
                         _buildProfileStat('Aadhaar', c.aadhaar ?? 'Not Added'),
                         _buildProfileStat('PAN', c.pan ?? 'Not Added'),
-                        _buildProfileStat('KYC Status', c.kycStatus.toUpperCase()),
+                        _buildProfileStat(
+                            'KYC Status', c.kycStatus.toUpperCase()),
                       ],
                     ),
                   ],
@@ -150,16 +175,31 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                   children: [
                     const Text(
                       'BILINGUAL KYC & LIVING DETAILS',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textSecondary),
                     ),
                     const SizedBox(height: 12),
                     _detailRow('Address', c.address),
-                    _detailRow('Center & Group', '${c.centerNo ?? "C-101"} / ${c.groupNo ?? "G-A"}'),
-                    _detailRow('Husband / Guardian', '${c.guardianType ?? "husband"}: ${c.husbandName ?? c.guardianName ?? "Ramesh Verma"}'),
-                    _detailRow('Husband Consent', c.consentGiven == 1 ? 'Consent Signed with OTP' : 'Pending Consent'),
-                    _detailRow('House Type', c.houseType ?? 'pucca'),
-                    _detailRow('Bank Account', '${c.bankName ?? "SBI"} - ${c.bankAcct ?? "30123456780"}'),
-                    _detailRow('Annual Income', '₹${c.annualIncome?.toStringAsFixed(0) ?? "2,16,000"} / year'),
+                    _detailRow('Center & Group',
+                        '${c.centerNo ?? "Not recorded"} / ${c.groupNo ?? "Not recorded"}'),
+                    _detailRow('Husband / Guardian',
+                        '${c.guardianType ?? "Not recorded"}: ${c.husbandName ?? c.guardianName ?? "Not recorded"}'),
+                    _detailRow(
+                        'Husband Consent',
+                        c.consentGiven == 1
+                            ? 'Consent recorded'
+                            : 'Not recorded'),
+                    _detailRow('House Type', c.houseType ?? 'Not recorded'),
+                    _detailRow('Bank Account',
+                        '${c.bankName ?? "Not recorded"} - ${_maskAccount(c.bankAcct)}'),
+                    _detailRow(
+                      'Annual Income',
+                      c.annualIncome == null
+                          ? 'Not recorded'
+                          : '₹${c.annualIncome!.toStringAsFixed(0)} / year',
+                    ),
                   ],
                 ),
               ),
@@ -176,7 +216,10 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                   children: [
                     const Text(
                       'LOG FIELD INTERACTION / CALL',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textSecondary),
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -184,9 +227,12 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                         DropdownButton<String>(
                           value: _channel,
                           items: const [
-                            DropdownMenuItem(value: 'call', child: Text('Call')),
-                            DropdownMenuItem(value: 'visit', child: Text('Visit')),
-                            DropdownMenuItem(value: 'whatsapp', child: Text('WhatsApp')),
+                            DropdownMenuItem(
+                                value: 'call', child: Text('Call')),
+                            DropdownMenuItem(
+                                value: 'visit', child: Text('Visit')),
+                            DropdownMenuItem(
+                                value: 'whatsapp', child: Text('WhatsApp')),
                           ],
                           onChanged: (val) => setState(() => _channel = val!),
                         ),
@@ -195,15 +241,19 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                           child: TextField(
                             controller: _noteCtrl,
                             decoration: const InputDecoration(
-                              hintText: 'Enter observation / discussion note...',
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              hintText:
+                                  'Enter observation / discussion note...',
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: _addLog,
-                          style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+                          style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12)),
                           child: const Icon(Icons.send, size: 18),
                         ),
                       ],
@@ -218,7 +268,10 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
             // Timeline of past communications
             const Text(
               'INTERACTION TIMELINE',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 8),
 
@@ -227,7 +280,10 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                 : _logs.isEmpty
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: Text('No interaction records yet.', style: TextStyle(color: AppTheme.textSecondary))),
+                        child: Center(
+                            child: Text('No interaction records yet.',
+                                style:
+                                    TextStyle(color: AppTheme.textSecondary))),
                       )
                     : ListView.builder(
                         shrinkWrap: true,
@@ -251,10 +307,15 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
                                   color: AppTheme.tealPrimary,
                                 ),
                               ),
-                              title: Text(log.note, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                              title: Text(log.note,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13)),
                               subtitle: Text(
                                 '${log.byName} • ${log.at.replaceRange(16, log.at.length, "")}',
-                                style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary),
                               ),
                             ),
                           );
@@ -269,9 +330,13 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
   Widget _buildProfileStat(String label, String value) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+        Text(label,
+            style:
+                const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
         const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+        Text(value,
+            style:
+                const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -282,10 +347,24 @@ class _CrmDetailScreenState extends State<CrmDetailScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12.5))),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5))),
+          SizedBox(
+              width: 140,
+              child: Text(label,
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary, fontSize: 12.5))),
+          Expanded(
+              child: Text(value,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 12.5))),
         ],
       ),
     );
+  }
+
+  String _maskAccount(String? account) {
+    if (account == null || account.trim().isEmpty) return 'Not recorded';
+    final clean = account.replaceAll(RegExp(r'\s+'), '');
+    if (clean.length <= 4) return '••••';
+    return '${'•' * (clean.length - 4)}${clean.substring(clean.length - 4)}';
   }
 }

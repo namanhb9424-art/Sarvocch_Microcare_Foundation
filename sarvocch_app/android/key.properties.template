@@ -1,0 +1,6 @@
+# Copy to android/key.properties and fill with values from your protected release keystore.
+# Never commit android/key.properties or the keystore file.
+keyAlias=REPLACE_WITH_KEY_ALIAS
+keyPassword=REPLACE_WITH_KEY_PASSWORD
+storeFile=app/REPLACE_WITH_KEYSTORE_FILE.jks
+storePassword=REPLACE_WITH_STORE_PASSWORD

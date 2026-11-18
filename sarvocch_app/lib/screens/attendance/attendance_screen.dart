@@ -15,7 +15,7 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
-  String _selectedBranch = 'Indore - Vijay Nagar';
+  String _selectedBranch = '';
   bool _isLocating = false;
 
   @override
@@ -45,39 +45,46 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _isLocating = false;
     });
 
-    if (locResult.errorMessage != null && !locResult.isRealGps) {
+    if (locResult.errorMessage != null ||
+        !locResult.isRealGps ||
+        locResult.latitude == null ||
+        locResult.longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(locResult.errorMessage!),
+          content: Text(locResult.errorMessage ??
+              'Live GPS is required. Attendance was not recorded.'),
           backgroundColor: Colors.blueGrey,
           duration: const Duration(seconds: 4),
         ),
       );
+      return;
     }
 
     final result = await context.read<AttendanceProvider>().punchIn(
           userId: user.id,
           branchName: _selectedBranch,
-          currentLat: locResult.latitude,
-          currentLng: locResult.longitude,
+          currentLat: locResult.latitude!,
+          currentLng: locResult.longitude!,
         );
 
     if (!mounted) return;
 
     if (result['success'] == true) {
-      final isWithin = result['within_radius'] as bool;
-      final dist = result['distance'] as int;
-      final gpsTag = locResult.isRealGps ? ' [Hardware GPS]' : ' [Reference GPS]';
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            isWithin
-                ? 'Punch-In Successful!$gpsTag Distance: ${dist}m (Within ${result['radius_m']}m branch geofence)'
-                : 'Warning:$gpsTag Punched from ${dist}m away from $_selectedBranch.',
-          ),
-          backgroundColor: isWithin ? AppTheme.success : Colors.orange,
+          content: Text(result['success'] == true
+              ? 'Punch-in recorded inside the configured branch geofence.'
+              : (result['error'] as String? ??
+                  'Punch-in could not be recorded.')),
+          backgroundColor:
+              result['success'] == true ? AppTheme.success : Colors.orange,
         ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(result['error'] as String? ??
+                'Punch-in could not be recorded.')),
       );
     }
   }
@@ -93,7 +100,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Punch-Out recorded successfully. Have a good evening!'),
+          content:
+              Text('Punch-Out recorded successfully. Have a good evening!'),
           backgroundColor: AppTheme.success,
         ),
       );
@@ -101,68 +109,130 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   void _showRequestModal() {
-    final reasonCtrl = TextEditingController(text: 'Forgot to punch, conducted center meeting in field');
-    final inCtrl = TextEditingController(text: '09:30');
-    final outCtrl = TextEditingController(text: '18:00');
+    final reasonCtrl = TextEditingController();
+    final inCtrl = TextEditingController();
+    final outCtrl = TextEditingController();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Attendance Correction Request', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        title: const Text('Attendance Correction Request',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Hierarchy: Staff -> Manager -> Admin approval',
+                'A branch manager or administrator must review this correction.',
                 style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: TextField(controller: inCtrl, decoration: const InputDecoration(labelText: 'Punch In'))),
+                  Expanded(
+                      child: TextField(
+                          controller: inCtrl,
+                          keyboardType: TextInputType.datetime,
+                          decoration: const InputDecoration(
+                              labelText: 'Punch In', hintText: 'HH:MM'))),
                   const SizedBox(width: 10),
-                  Expanded(child: TextField(controller: outCtrl, decoration: const InputDecoration(labelText: 'Punch Out'))),
+                  Expanded(
+                      child: TextField(
+                          controller: outCtrl,
+                          keyboardType: TextInputType.datetime,
+                          decoration: const InputDecoration(
+                              labelText: 'Punch Out', hintText: 'HH:MM'))),
                 ],
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: reasonCtrl,
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Reason for manual request *'),
+                decoration: const InputDecoration(
+                    labelText: 'Reason for manual request *'),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               final auth = context.read<AuthProvider>();
               final user = auth.currentUser;
-              final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+              if (user == null || reasonCtrl.text.trim().isEmpty) return;
+              final todayStr =
+                  DateTime.now().toIso8601String().substring(0, 10);
 
-              await context.read<AttendanceProvider>().submitRequest(
-                    userId: user?.id ?? 4,
-                    branch: user?.branch ?? 'Indore - Vijay Nagar',
-                    day: todayStr,
-                    inTime: inCtrl.text,
-                    outTime: outCtrl.text,
-                    reason: reasonCtrl.text.trim(),
-                    approverRole: 'manager',
-                    approverId: 2,
-                  );
+              final submitted =
+                  await context.read<AttendanceProvider>().submitRequest(
+                        actorUserId: user.id,
+                        day: todayStr,
+                        inTime: inCtrl.text,
+                        outTime: outCtrl.text,
+                        reason: reasonCtrl.text.trim(),
+                      );
 
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Attendance edit request sent to Branch Manager for approval')),
-                );
+              if (submitted && ctx.mounted) Navigator.pop(ctx);
+              if (mounted && submitted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text(
+                      'Attendance correction request submitted for review.'),
+                ));
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Attendance correction request was not saved.'),
+                ));
               }
             },
             child: const Text('Submit Request'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showReviewDialog(int requestId, String decision) async {
+    final remarksCtrl = TextEditingController();
+    final remarks = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(decision == 'approved'
+            ? 'Approve correction'
+            : 'Reject correction'),
+        content: TextField(
+          controller: remarksCtrl,
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Review remarks *'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, remarksCtrl.text.trim()),
+            child: const Text('Record review'),
+          ),
+        ],
+      ),
+    );
+    remarksCtrl.dispose();
+    if (remarks == null || remarks.isEmpty || !mounted) return;
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) return;
+    final saved = await context.read<AttendanceProvider>().decideRequest(
+          requestId: requestId,
+          decision: decision,
+          actorUserId: user.id,
+          remarks: remarks,
+        );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(saved ? 'Review recorded.' : 'Review was not recorded.'),
+        backgroundColor: saved ? AppTheme.success : AppTheme.danger,
       ),
     );
   }
@@ -173,6 +243,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final auth = context.watch<AuthProvider>();
     final user = auth.currentUser;
     final today = attProv.todayRecord;
+    final branchRows =
+        attProv.branches.where((branch) => branch.name == _selectedBranch);
+    final branch = branchRows.isEmpty ? null : branchRows.first;
+    final geofenceConfigured = branch?.lat != null &&
+        branch?.lng != null &&
+        (branch?.radiusM ?? 0) > 0;
 
     return Scaffold(
       appBar: const CustomAppBar(title: 'Geofenced Attendance & Punch'),
@@ -202,18 +278,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       children: [
                         const Text(
                           'TODAY\'S PUNCH-IN STATUS',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textSecondary),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: today?.inTime != null ? AppTheme.successLight : AppTheme.warningLight,
+                            color: today?.inTime != null
+                                ? AppTheme.successLight
+                                : AppTheme.warningLight,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            today?.inTime != null ? 'Punched In' : 'Not Punched Today',
+                            today?.inTime != null
+                                ? 'Punched In'
+                                : 'Not Punched Today',
                             style: TextStyle(
-                              color: today?.inTime != null ? AppTheme.success : AppTheme.warning,
+                              color: today?.inTime != null
+                                  ? AppTheme.success
+                                  : AppTheme.warning,
                               fontWeight: FontWeight.w700,
                               fontSize: 11,
                             ),
@@ -226,12 +312,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     // Branch & Geofence GPS
                     Row(
                       children: [
-                        const Icon(Icons.location_on, color: AppTheme.tealPrimary, size: 20),
+                        const Icon(Icons.location_on,
+                            color: AppTheme.tealPrimary, size: 20),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Branch: $_selectedBranch\nGeofence check: 2000m radius',
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                            'Branch: ${_selectedBranch.isEmpty ? 'Not assigned' : _selectedBranch}\nGeofence: ${geofenceConfigured ? '${branch!.radiusM}m' : 'Not configured'}',
+                            style: const TextStyle(
+                                fontSize: 12.5, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -245,10 +333,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Punch In Time:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                              const Text('Punch In Time:',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary)),
                               Text(
-                                today!.inTime!.length > 16 ? today.inTime!.substring(11, 16) : today.inTime!,
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.tealPrimary),
+                                today!.inTime!.length > 16
+                                    ? today.inTime!.substring(11, 16)
+                                    : today.inTime!,
+                                style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.tealPrimary),
                               ),
                             ],
                           ),
@@ -256,10 +352,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text('Punch Out Time:', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                                const Text('Punch Out Time:',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.textSecondary)),
                                 Text(
-                                  today.outTime!.length > 16 ? today.outTime!.substring(11, 16) : today.outTime!,
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.tealPrimary),
+                                  today.outTime!.length > 16
+                                      ? today.outTime!.substring(11, 16)
+                                      : today.outTime!,
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.tealPrimary),
                                 ),
                               ],
                             ),
@@ -276,25 +380,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2),
                                   )
                                 : const Icon(Icons.touch_app, size: 18),
-                            label: Text(_isLocating ? 'Acquiring GPS...' : 'Punch In (2000m Check)'),
+                            label: Text(
+                                _isLocating ? 'Acquiring GPS...' : 'Punch In'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: (today?.inTime != null || _isLocating) ? Colors.grey : AppTheme.tealPrimary,
+                              backgroundColor:
+                                  (today?.inTime != null || _isLocating)
+                                      ? Colors.grey
+                                      : AppTheme.tealPrimary,
                             ),
-                            onPressed: (today?.inTime != null || _isLocating) ? null : _handlePunchIn,
+                            onPressed: (today?.inTime != null ||
+                                    _isLocating ||
+                                    !geofenceConfigured)
+                                ? null
+                                : _handlePunchIn,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.door_back_door_outlined, size: 18),
+                            icon: const Icon(Icons.door_back_door_outlined,
+                                size: 18),
                             label: const Text('Punch Out'),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppTheme.tealPrimary),
+                              side:
+                                  const BorderSide(color: AppTheme.tealPrimary),
                             ),
-                            onPressed: today?.inTime == null || today?.outTime != null ? null : _handlePunchOut,
+                            onPressed:
+                                today?.inTime == null || today?.outTime != null
+                                    ? null
+                                    : _handlePunchOut,
                           ),
                         ),
                       ],
@@ -310,7 +428,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             if (attProv.requests.isNotEmpty) ...[
               const Text(
                 'ATTENDANCE CORRECTION REQUESTS',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary, letterSpacing: 0.8),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                    letterSpacing: 0.8),
               ),
               const SizedBox(height: 8),
               ListView.builder(
@@ -320,7 +442,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 itemBuilder: (context, index) {
                   final req = attProv.requests[index];
                   final isPending = req.status == 'pending';
-                  final canDecide = (user?.role == 'admin' || user?.role == 'manager');
+                  final canDecide =
+                      (user?.role == 'admin' || user?.role == 'manager');
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -334,12 +457,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             children: [
                               Text(
                                 '${req.userName ?? "Employee"} • Date: ${req.day}',
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: isPending ? Colors.orange.withOpacity(0.15) : AppTheme.successLight,
+                                  color: isPending
+                                      ? Colors.orange.withOpacity(0.15)
+                                      : AppTheme.successLight,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -347,7 +475,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   style: TextStyle(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w700,
-                                    color: isPending ? Colors.orange.shade800 : AppTheme.success,
+                                    color: isPending
+                                        ? Colors.orange.shade800
+                                        : AppTheme.success,
                                   ),
                                 ),
                               ),
@@ -356,11 +486,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           const SizedBox(height: 4),
                           Text(
                             'Requested Hours: ${req.inTime} - ${req.outTime}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600),
                           ),
                           Text(
                             'Reason: ${req.reason}',
-                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                            style: const TextStyle(
+                                fontSize: 12, color: AppTheme.textSecondary),
                           ),
                           if (isPending && canDecide) ...[
                             const SizedBox(height: 8),
@@ -368,28 +500,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 TextButton(
-                                  onPressed: () => context.read<AttendanceProvider>().decideRequest(
-                                        requestId: req.id,
-                                        decision: 'rejected',
-                                        decidedBy: user?.name ?? 'Manager',
-                                        remarks: 'Ineligible',
-                                        userId: user?.id ?? 4,
-                                      ),
-                                  child: const Text('Reject', style: TextStyle(color: AppTheme.danger, fontSize: 12)),
+                                  onPressed: () =>
+                                      _showReviewDialog(req.id, 'rejected'),
+                                  child: const Text('Reject',
+                                      style: TextStyle(
+                                          color: AppTheme.danger,
+                                          fontSize: 12)),
                                 ),
                                 const SizedBox(width: 8),
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 6),
                                     textStyle: const TextStyle(fontSize: 12),
                                   ),
-                                  onPressed: () => context.read<AttendanceProvider>().decideRequest(
-                                        requestId: req.id,
-                                        decision: 'approved',
-                                        decidedBy: user?.name ?? 'Manager',
-                                        remarks: 'Approved by Branch Manager',
-                                        userId: user?.id ?? 4,
-                                      ),
+                                  onPressed: () =>
+                                      _showReviewDialog(req.id, 'approved'),
                                   child: const Text('Approve'),
                                 ),
                               ],
@@ -407,7 +533,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             // Monthly History
             const Text(
               'RECENT ATTENDANCE LOG',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary, letterSpacing: 0.8),
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 0.8),
             ),
             const SizedBox(height: 8),
 
@@ -421,13 +551,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   margin: const EdgeInsets.only(bottom: 6),
                   child: ListTile(
                     dense: true,
-                    leading: const Icon(Icons.check_circle, color: AppTheme.success, size: 20),
-                    title: Text(r.day, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    leading: const Icon(Icons.check_circle,
+                        color: AppTheme.success, size: 20),
+                    title: Text(r.day,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     subtitle: Text(
                       'In: ${r.inTime != null && r.inTime!.length > 16 ? r.inTime!.substring(11, 16) : (r.inTime ?? "--:--")} | Out: ${r.outTime != null && r.outTime!.length > 16 ? r.outTime!.substring(11, 16) : (r.outTime ?? "--:--")}',
-                      style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppTheme.textSecondary),
                     ),
-                    trailing: const Text('Present', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.tealPrimary)),
+                    trailing: const Text('Present',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.tealPrimary)),
                   ),
                 );
               },

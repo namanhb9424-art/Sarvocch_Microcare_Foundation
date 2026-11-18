@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/loan_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/loan_provider.dart';
@@ -16,9 +17,14 @@ class LoansListScreen extends StatefulWidget {
   State<LoansListScreen> createState() => _LoansListScreenState();
 }
 
-class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProviderStateMixin {
+class _LoansListScreenState extends State<LoansListScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final currency = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
 
   @override
   void initState() {
@@ -45,6 +51,8 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
         return allLoans.where((l) => l.customerId == user?.customerId).toList();
       } else if (user?.role == 'field_agent') {
         return allLoans.where((l) => l.agentId == user?.id).toList();
+      } else if (user?.role != 'admin') {
+        return allLoans.where((l) => l.branch == user?.branch).toList();
       }
       return allLoans;
     }();
@@ -66,7 +74,10 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
               unselectedLabelColor: AppTheme.textSecondary,
               indicatorColor: AppTheme.tealPrimary,
               indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
               tabs: [
                 Tab(text: 'Active (${activeLoans.length})'),
                 Tab(text: 'Overdue (${overdueLoans.length})'),
@@ -80,7 +91,10 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
               controller: _tabController,
               children: [
                 _buildLoanList(activeLoans, 'No active loans'),
-                _buildLoanList(overdueLoans, 'No overdue loans! Outstanding is on track.'),
+                _buildLoanList(
+                  overdueLoans,
+                  'No overdue loans! Outstanding is on track.',
+                ),
                 _buildLoanList(closedLoans, 'No closed loans'),
               ],
             ),
@@ -96,9 +110,16 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.check_circle_outline, size: 52, color: AppTheme.textMuted),
+            const Icon(
+              Icons.check_circle_outline,
+              size: 52,
+              color: AppTheme.textMuted,
+            ),
             const SizedBox(height: 12),
-            Text(emptyMsg, style: const TextStyle(color: AppTheme.textSecondary)),
+            Text(
+              emptyMsg,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
           ],
         ),
       );
@@ -109,7 +130,9 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
       itemCount: list.length,
       itemBuilder: (context, index) {
         final loan = list[index];
-        final progress = loan.totalCount > 0 ? (loan.paidCount / loan.totalCount) : 0.0;
+        final progress = loan.totalCount > 0
+            ? (loan.paidCount / loan.totalCount)
+            : 0.0;
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -117,9 +140,7 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => LoanDetailScreen(loan: loan),
-                ),
+                MaterialPageRoute(builder: (_) => LoanDetailScreen(loan: loan)),
               );
             },
             borderRadius: BorderRadius.circular(10),
@@ -134,45 +155,69 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.tealSurface,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               '#LN-${loan.id}',
-                              style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.tealPrimary, fontSize: 11),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.tealPrimary,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             loan.customerName ?? 'Borrower',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
                         ],
                       ),
                       if (loan.hasOverdue)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.dangerLight,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
                             'OVERDUE',
-                            style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w700, fontSize: 10),
+                            style: TextStyle(
+                              color: AppTheme.danger,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                            ),
                           ),
                         )
                       else if (loan.status == 'closed')
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.successLight,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
                             'CLOSED',
-                            style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.w700, fontSize: 10),
+                            style: TextStyle(
+                              color: AppTheme.success,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                            ),
                           ),
                         ),
                     ],
@@ -184,22 +229,59 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Principal Loan', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
-                          Text(currency.format(loan.principal), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                          const Text(
+                            'Principal Loan',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            currency.format(loan.principal),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Monthly EMI', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
-                          Text(currency.format(loan.emi), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppTheme.tealPrimary)),
+                          const Text(
+                            'Monthly EMI',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            currency.format(loan.emi),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: AppTheme.tealPrimary,
+                            ),
+                          ),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Outstanding', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
-                          Text(currency.format(loan.outstanding), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                          const Text(
+                            'Outstanding',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            currency.format(loan.outstanding),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -211,7 +293,9 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
                     child: LinearProgressIndicator(
                       value: progress,
                       backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(loan.hasOverdue ? Colors.orange : AppTheme.tealPrimary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        loan.hasOverdue ? Colors.orange : AppTheme.tealPrimary,
+                      ),
                       minHeight: 6,
                     ),
                   ),
@@ -221,7 +305,10 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
                     children: [
                       Text(
                         'Paid: ${loan.paidCount} of ${loan.totalCount} EMIs (${currency.format(loan.paidTotal)})',
-                        style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       if (loan.nextDueDate != null && loan.status == 'active')
                         Text(
@@ -229,7 +316,9 @@ class _LoansListScreenState extends State<LoansListScreen> with SingleTickerProv
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
-                            color: loan.hasOverdue ? AppTheme.danger : AppTheme.tealPrimary,
+                            color: loan.hasOverdue
+                                ? AppTheme.danger
+                                : AppTheme.tealPrimary,
                           ),
                         ),
                     ],

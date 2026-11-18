@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import org.gradle.api.GradleException
 
 plugins {
     id("com.android.application")
@@ -11,6 +12,28 @@ val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+val releaseSigningKeys = listOf("keyAlias", "keyPassword", "storeFile", "storePassword")
+val missingReleaseSigningKeys = releaseSigningKeys.filter {
+    keystoreProperties.getProperty(it)?.isNotBlank() != true
+}
+val releaseKeystorePath = keystoreProperties.getProperty("storeFile")?.trim()
+val releaseKeystoreFile = releaseKeystorePath?.let { rootProject.file(it) }
+val releaseBuildRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+if (releaseBuildRequested) {
+    if (!keystorePropertiesFile.isFile || missingReleaseSigningKeys.isNotEmpty()) {
+        throw GradleException(
+            "Release signing is required. Create android/key.properties from " +
+                "android/key.properties.template and provide protected signing values."
+        )
+    }
+    if (releaseKeystoreFile?.isFile != true) {
+        throw GradleException(
+            "The release keystore file configured in android/key.properties was not found."
+        )
+    }
 }
 
 android {
@@ -25,10 +48,10 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-            storePassword = keystoreProperties["storePassword"] as String?
+            keyAlias = keystoreProperties.getProperty("keyAlias")?.trim()
+            keyPassword = keystoreProperties.getProperty("keyPassword")?.trim()
+            storeFile = releaseKeystoreFile
+            storePassword = keystoreProperties.getProperty("storePassword")?.trim()
         }
     }
 
@@ -42,7 +65,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

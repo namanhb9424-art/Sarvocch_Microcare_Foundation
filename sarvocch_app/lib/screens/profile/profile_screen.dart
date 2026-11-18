@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../data/database_helper.dart';
+
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
@@ -22,16 +22,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    _oldPassCtrl.clear();
     _oldPassCtrl.dispose();
+    _newPassCtrl.clear();
     _newPassCtrl.dispose();
+    _confirmPassCtrl.clear();
     _confirmPassCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _changePassword() async {
-    final oldPass = _oldPassCtrl.text.trim();
-    final newPass = _newPassCtrl.text.trim();
-    final confirmPass = _confirmPassCtrl.text.trim();
+    final oldPass = _oldPassCtrl.text;
+    final newPass = _newPassCtrl.text;
+    final confirmPass = _confirmPassCtrl.text;
 
     if (oldPass.isEmpty || newPass.isEmpty || confirmPass.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -40,9 +43,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    if (newPass.length < 6) {
+    if (newPass.length < 12) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New password must be at least 6 characters')),
+        const SnackBar(
+          content: Text('New password must be at least 12 characters'),
+        ),
       );
       return;
     }
@@ -61,36 +66,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final currentUser = auth.currentUser;
       if (currentUser == null) return;
 
-      final db = await DatabaseHelper.instance.database;
-
-      // Verify old password
-      final userRow = await db.query(
-        'users',
-        where: 'id = ?',
-        whereArgs: [currentUser.id],
+      final changed = await auth.changePassword(
+        currentPassword: oldPass,
+        newPassword: newPass,
       );
-
-      if (userRow.isEmpty || userRow.first['password_hash'] != oldPass) {
+      if (!changed) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Current password is incorrect'), backgroundColor: AppTheme.danger),
+            const SnackBar(
+              content: Text(
+                'Password update failed. Check the current password and new password rules.',
+              ),
+              backgroundColor: AppTheme.danger,
+            ),
           );
         }
-        setState(() => _isLoading = false);
         return;
       }
-
-      // Update password
-      await db.update(
-        'users',
-        {'password_hash': newPass},
-        where: 'id = ?',
-        whereArgs: [currentUser.id],
-      );
 
       _oldPassCtrl.clear();
       _newPassCtrl.clear();
       _confirmPassCtrl.clear();
+
+      if (currentUser.mustChangePassword && mounted) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          currentUser.role == 'customer' ? '/portal' : '/dashboard',
+          (_) => false,
+        );
+        return;
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -100,14 +105,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error changing password: $e'), backgroundColor: AppTheme.danger),
+          const SnackBar(
+            content: Text('Unable to update the password.'),
+            backgroundColor: AppTheme.danger,
+          ),
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        _oldPassCtrl.clear();
+        _newPassCtrl.clear();
+        _confirmPassCtrl.clear();
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -139,32 +152,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       radius: 36,
                       backgroundColor: AppTheme.tealPrimary,
                       child: Text(
-                        user.name.isNotEmpty ? user.name.substring(0, 1).toUpperCase() : 'U',
-                        style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold),
+                        user.name.isNotEmpty
+                            ? user.name.substring(0, 1).toUpperCase()
+                            : 'U',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(user.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.tealSurface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.tealPrimary.withOpacity(0.3)),
+                        border: Border.all(
+                          color: AppTheme.tealPrimary.withOpacity(0.3),
+                        ),
                       ),
                       child: Text(
                         user.role.toUpperCase().replaceAll('_', ' '),
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.tealDark),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.tealDark,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 10),
-                    _profileRow(Icons.account_circle_outlined, 'Username', user.username),
-                    _profileRow(Icons.badge_outlined, 'Employee ID / CIF', 'EMP-${user.id.toString().padLeft(3, '0')}'),
-                    _profileRow(Icons.business_outlined, 'Assigned Branch', user.branch.isNotEmpty ? user.branch : 'Headquarters'),
-                    _profileRow(Icons.verified_user_outlined, 'Status', user.role.isNotEmpty ? 'Active & Authorized' : 'Suspended'),
+                    _profileRow(
+                      Icons.account_circle_outlined,
+                      'Username',
+                      user.username,
+                    ),
+                    _profileRow(
+                      Icons.badge_outlined,
+                      'Employee ID / CIF',
+                      'EMP-${user.id.toString().padLeft(3, '0')}',
+                    ),
+                    _profileRow(
+                      Icons.business_outlined,
+                      'Assigned Branch',
+                      user.branch.isNotEmpty ? user.branch : 'Headquarters',
+                    ),
+                    _profileRow(
+                      Icons.verified_user_outlined,
+                      'Status',
+                      user.role.isNotEmpty
+                          ? 'Active & Authorized'
+                          : 'Suspended',
+                    ),
                   ],
                 ),
               ),
@@ -183,7 +235,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Icon(Icons.lock_reset, color: AppTheme.tealPrimary),
                         SizedBox(width: 8),
-                        Text('Change Account Password', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        Text(
+                          'Change Account Password',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -193,8 +251,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       decoration: InputDecoration(
                         labelText: 'Current Password *',
                         suffixIcon: IconButton(
-                          icon: Icon(_obscureOld ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() => _obscureOld = !_obscureOld),
+                          icon: Icon(
+                            _obscureOld
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () =>
+                              setState(() => _obscureOld = !_obscureOld),
                         ),
                       ),
                     ),
@@ -203,10 +266,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       controller: _newPassCtrl,
                       obscureText: _obscureNew,
                       decoration: InputDecoration(
-                        labelText: 'New Password (min 6 chars) *',
+                        labelText: 'New Password (min 12 characters) *',
                         suffixIcon: IconButton(
-                          icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                          icon: Icon(
+                            _obscureNew
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () =>
+                              setState(() => _obscureNew = !_obscureNew),
                         ),
                       ),
                     ),
@@ -225,7 +293,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _changePassword,
                         child: _isLoading
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : const Text('Update Password'),
                       ),
                     ),
@@ -242,11 +317,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               height: 48,
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.logout, color: AppTheme.danger),
-                label: const Text('Sign Out from Device', style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.danger)),
+                label: const Text(
+                  'Sign Out from Device',
+                  style: TextStyle(
+                    color: AppTheme.danger,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppTheme.danger),
+                ),
                 onPressed: () {
                   auth.logout();
-                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/login',
+                    (route) => false,
+                  );
                 },
               ),
             ),
@@ -266,14 +353,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 10),
           SizedBox(
             width: 120,
-            child: Text(label, style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: AppTheme.textSecondary,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
     );
   }
 }
-

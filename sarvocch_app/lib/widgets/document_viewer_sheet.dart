@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../services/pdf_service.dart';
 import '../theme/app_theme.dart';
 
@@ -15,11 +16,17 @@ class DocumentViewerSheet extends StatelessWidget {
     required this.data,
   });
 
-  static void show(BuildContext context, {required DocumentType type, required Map<String, dynamic> data}) {
+  static void show(
+    BuildContext context, {
+    required DocumentType type,
+    required Map<String, dynamic> data,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => DocumentViewerSheet(type: type, data: data),
     );
   }
@@ -45,45 +52,59 @@ class DocumentViewerSheet extends StatelessWidget {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: AppTheme.tealSurface,
-                  child: const Icon(Icons.print, size: 18, color: AppTheme.tealPrimary),
+                  child: const Icon(
+                    Icons.print,
+                    size: 18,
+                    color: AppTheme.tealPrimary,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     _getTitle(),
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.download, color: AppTheme.tealPrimary),
                   tooltip: 'Export PDF Document',
-                  onPressed: () async {
-                    try {
-                      final bytes = type == DocumentType.loanPassbook
-                          ? await PdfService.generatePassbookCard(data: data)
-                          : type == DocumentType.preGrtCertificate
-                              ? await PdfService.generatePreGrtCertificate(data: data)
-                              : await PdfService.generateSanctionLetter(
-                                  loanId: '${data['id'] ?? "001"}',
-                                  customerName: data['customer_name'] ?? data['name'] ?? 'Sunita Verma',
-                                  customerId: '${data['customer_id'] ?? data['id'] ?? "001"}',
-                                  phone: (data['phone'] ?? '9876543210').toString(),
-                                  branch: (data['branch'] ?? 'Indore - Vijay Nagar').toString(),
-                                  amount: (data['principal'] ?? data['amount'] ?? 40000 as num).toDouble(),
-                                  rate: (data['rate'] ?? 18 as num).toDouble(),
-                                  tenure: ((data['tenure'] ?? 12) as num).toInt(),
-                                  emi: (data['emi'] ?? 3667 as num).toDouble(),
-                                  purpose: (data['purpose'] ?? 'Microenterprise expansion').toString(),
-                                  sanctionDate: (data['start_date'] ?? '2026-05-10').toString(),
-                                );
-                      await PdfService.printOrShareDocument(
-                        title: _getTitle().replaceAll(' ', '_').replaceAll('/', '_'),
-                        bytes: bytes,
-                      );
-                    } catch (e) {
-                      debugPrint('PDF export error: $e');
-                    }
-                  },
+                  onPressed: type == DocumentType.loanPassbook
+                      ? () async {
+                          try {
+                            final bytes = await PdfService.generatePassbookCard(
+                              data: data,
+                            );
+                            await PdfService.printOrShareDocument(
+                              title: _getTitle()
+                                  .replaceAll(' ', '_')
+                                  .replaceAll('/', '_'),
+                              bytes: bytes,
+                            );
+                          } catch (_) {
+                            debugPrint('Passbook export unavailable.');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Passbook export needs a saved loan schedule.',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        }
+                      : () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'PDF export is disabled until the organization approves its official document content.',
+                              ),
+                            ),
+                          );
+                        },
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -110,28 +131,34 @@ class DocumentViewerSheet extends StatelessWidget {
       case DocumentType.loanPassbook:
         return 'Loan Passbook / ऋण कार्ड';
       case DocumentType.loginSlip:
-        return 'Customer Login Slip / लॉगिन पर्ची';
+        return 'Customer Summary / ग्राहक विवरण';
       case DocumentType.kycDossier:
         return 'Bilingual KYC Dossier / केवाईसी प्रपत्र';
       case DocumentType.preGrtCertificate:
-        return 'Pre-GRT Certificate / प्री-जीआरटी प्रमाणपत्र';
+        return 'Pre-GRT Review Summary / समूह समीक्षा';
     }
   }
 
   Widget _buildDocumentContent(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final currency = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    );
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.grey.shade400, width: 1.5),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Official Header
+          // Local record preview; official issue templates are not configured.
           Center(
             child: Column(
               children: [
@@ -139,7 +166,11 @@ class DocumentViewerSheet extends StatelessWidget {
                 const SizedBox(height: 6),
                 const Text(
                   'SARVOOCCH Microcare Foundation',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.tealPrimary),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    color: AppTheme.tealPrimary,
+                  ),
                 ),
                 const Text(
                   'सर्वोच्च माइक्रोकेयर फाउंडेशन',
@@ -147,14 +178,21 @@ class DocumentViewerSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.tealSurface,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     _getTitle().toUpperCase(),
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.tealDark),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.tealDark,
+                    ),
                   ),
                 ),
               ],
@@ -163,77 +201,112 @@ class DocumentViewerSheet extends StatelessWidget {
           const SizedBox(height: 14),
           const Divider(thickness: 1.5),
           const SizedBox(height: 10),
+          const Text(
+            'LOCAL RECORD PREVIEW · NOT AN OFFICIAL OR SIGNED DOCUMENT',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.warning,
+            ),
+          ),
+          const SizedBox(height: 10),
 
           if (type == DocumentType.loginSlip) ...[
-            _docRow('Borrower Full Name', data['name'] ?? 'Sunita Verma'),
-            _docRow('Customer ID / CIF', 'CUST-${data['id'] ?? "001"}'),
-            _docRow('Registered Mobile', '+91 ${data['phone'] ?? "9876543210"}'),
-            _docRow('Branch Office', data['branch'] ?? 'Indore - Vijay Nagar'),
-            _docRow('Default Portal Username', 'cust${data['id'] ?? "1"}'),
-            _docRow('Temporary Access PIN', 'cust123'),
+            _docRow('Customer Name', _value(data['name'])),
+            _docRow(
+              'Customer ID',
+              data['id'] == null ? 'Not recorded' : 'CUST-${data['id']}',
+            ),
+            _docRow('Registered Mobile', _value(data['phone'])),
+            _docRow('Branch Office', _value(data['branch'])),
+            _docRow('Portal Access', 'Not configured'),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(10),
               color: Colors.amber.shade50,
               child: const Text(
-                'महत्वपूर्ण: कृपया अपना पिन किसी के साथ साझा न करें। पोर्टल पर पहली बार लॉग इन करने के बाद अपना पासवर्ड बदल लें।',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.brown),
+                'Customer portal credentials are not generated by this app. An administrator must create and link an account before access is available.',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.brown,
+                ),
               ),
             ),
           ] else if (type == DocumentType.loanPassbook) ...[
-            _docRow('Loan Account No', 'LN-${data['id'] ?? "001"}'),
-            _docRow('Borrower Name', data['customer_name'] ?? 'Sunita Verma'),
-            _docRow('Loan Product Scheme', data['product_name'] ?? 'General Micro Loan'),
-            _docRow('Sanctioned Principal', currency.format(data['principal'] ?? 40000)),
-            _docRow('Interest Rate (p.a.)', '${data['rate'] ?? 18}% (${data['method'] ?? "reducing"})'),
-            _docRow('Monthly EMI Amount', currency.format(data['emi'] ?? 3667)),
-            _docRow('Disbursement Date', data['start_date'] ?? '2026-05-10'),
-            _docRow('Total Tenure', '${data['tenure'] ?? 12} Monthly Installments'),
+            _docRow(
+              'Loan Account No',
+              data['id'] == null ? 'Not recorded' : 'LN-${data['id']}',
+            ),
+            _docRow('Borrower Name', _value(data['customer_name'])),
+            _docRow('Loan Product', _value(data['product_name'])),
+            _docRow('Principal', _money(data['principal'], currency)),
+            _docRow(
+              'Interest Rate (p.a.)',
+              data['rate'] == null
+                  ? 'Not recorded'
+                  : '${data['rate']}% (${_value(data['method'])})',
+            ),
+            _docRow('Installment Amount', _money(data['emi'], currency)),
+            _docRow('Disbursement Date', _value(data['start_date'])),
+            _docRow(
+              'Total Tenure',
+              data['tenure'] == null
+                  ? 'Not recorded'
+                  : '${data['tenure']} installments',
+            ),
           ] else if (type == DocumentType.kycDossier) ...[
-            _docRow('Applicant Name', data['name'] ?? 'Sunita Verma'),
-            _docRow('Aadhaar Reference', 'XXXXXXXX1234 (Verified)'),
-            _docRow('PAN Card Ref', data['pan'] ?? 'ABCDE1234F'),
-            _docRow('Center & Group Code', 'Center ${data['center_no'] ?? "C-101"} • Group ${data['group_no'] ?? "G-A"}'),
-            _docRow('Husband / Co-Applicant', data['husband_name'] ?? 'Ramesh Verma'),
-            _docRow('Residence Standard', 'Pucca / Own House (Physically Verified)'),
-            _docRow('Annual Household Income', '₹2,16,000 / year'),
-            _docRow('Husband Written Consent', 'YES (Formal RBI JLG Guarantee Signed)'),
+            _docRow('Applicant Name', _value(data['name'])),
+            _docRow('Aadhaar Reference', _value(data['aadhaar'])),
+            _docRow('PAN Reference', _value(data['pan'])),
+            _docRow(
+              'Center & Group Code',
+              '${_value(data['center_no'])} • ${_value(data['group_no'])}',
+            ),
+            _docRow('Husband / Co-Applicant', _value(data['husband_name'])),
+            _docRow('KYC Review Status', _value(data['kyc_status'])),
+            _docRow(
+              'Annual Household Income',
+              _money(data['annual_income'], currency),
+            ),
+            _docRow('Consent Status', _value(data['consent_status'])),
           ] else if (type == DocumentType.preGrtCertificate) ...[
-            _docRow('Center & Group No', 'Center ${data['center_no']} • Group ${data['group_no']}'),
-            _docRow('Village & District', '${data['village']}, ${data['district']}'),
-            _docRow('Operating Branch', data['branch'] ?? 'Indore - Vijay Nagar'),
-            _docRow('Field Officer (PSO)', '${data['pso_name']} (${data['pso_empid']})'),
-            _docRow('7 CGT Discipline Points', 'VERIFIED & PASSED'),
-            _docRow('Approved By', '${data['verified_by'] ?? "Meera Manager"} (Branch Manager)'),
-            _docRow('Verification Date', data['verified_on'] ?? '2026-09-02'),
+            _docRow(
+              'Center & Group No',
+              '${_value(data['center_no'])} • ${_value(data['group_no'])}',
+            ),
+            _docRow(
+              'Village & District',
+              '${_value(data['village'])}, ${_value(data['district'])}',
+            ),
+            _docRow('Operating Branch', _value(data['branch'])),
+            _docRow(
+              'Field Officer',
+              '${_value(data['pso_name'])} (${_value(data['pso_empid'])})',
+            ),
+            _docRow('Review Status', _value(data['status'])),
+            _docRow('Reviewed By', _value(data['verified_by'])),
+            _docRow('Review Date', _value(data['verified_on'])),
           ],
 
-          const SizedBox(height: 30),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: 30),
-                  Text('__________________________', style: TextStyle(color: Colors.grey)),
-                  Text('Borrower Signature / Thumb', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  SizedBox(height: 30),
-                  Text('__________________________', style: TextStyle(color: Colors.grey)),
-                  Text('Authorised Signatory', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                  Text('SARVOOCCH Microcare', style: TextStyle(fontSize: 9, color: AppTheme.textSecondary)),
-                ],
-              ),
-            ],
+          const SizedBox(height: 18),
+          const Text(
+            'No signatures, issuer checks, or external account data are captured in this preview.',
+            style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
           ),
         ],
       ),
     );
+  }
+
+  String _value(dynamic value) {
+    final result = value?.toString().trim() ?? '';
+    return result.isEmpty ? 'Not recorded' : result;
+  }
+
+  String _money(dynamic value, NumberFormat currency) {
+    if (value is! num) return 'Not recorded';
+    return currency.format(value);
   }
 
   Widget _docRow(String label, String value) {
@@ -244,11 +317,25 @@ class DocumentViewerSheet extends StatelessWidget {
         children: [
           SizedBox(
             width: 160,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5, color: AppTheme.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 11.5,
+                color: AppTheme.textSecondary,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppTheme.textPrimary)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: AppTheme.textPrimary,
+              ),
+            ),
           ),
         ],
       ),

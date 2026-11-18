@@ -2,9 +2,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
 import '../providers/customer_provider.dart';
 import '../providers/loan_provider.dart';
+import '../services/currency_amount.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/custom_drawer.dart';
@@ -18,14 +20,20 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final currencyFormat = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LoanProvider>().fetchAll();
-      context.read<CustomerProvider>().fetchCustomers();
+      final user = context.read<AuthProvider>().currentUser;
+      if (user == null) return;
+      context.read<LoanProvider>().fetchAll(actorUserId: user.id);
+      context.read<CustomerProvider>().fetchCustomers(actorUserId: user.id);
     });
   }
 
@@ -34,6 +42,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final loan = context.watch<LoanProvider>();
     final auth = context.watch<AuthProvider>();
     final user = auth.currentUser;
+    final visibleLoans = loan.loans.where((record) {
+      if (user == null) return false;
+      if (user.role == 'admin') return true;
+      if (user.role == 'field_agent') return record.agentId == user.id;
+      if (user.role == 'customer') return record.customerId == user.customerId;
+      return record.branch == user.branch;
+    }).toList();
+    final visibleApplications = loan.applications.where((application) {
+      if (user == null) return false;
+      if (user.role == 'admin') return true;
+      if (user.role == 'field_agent') return application.agentId == user.id;
+      if (user.role == 'customer') {
+        return application.customerId == user.customerId;
+      }
+      return application.branch == user.branch;
+    }).toList();
+    final totalDisbursedPaise = visibleLoans.fold<int>(
+      0,
+      (sum, record) => sum + record.principalPaise,
+    );
+    final totalOutstandingPaise = visibleLoans
+        .where((record) => record.status == 'active')
+        .fold<int>(0, (sum, record) => sum + record.outstandingPaise);
+    final overdueCount = visibleLoans
+        .where((record) => record.hasOverdue)
+        .length;
+    final portfolioPaise = <String, int>{};
+    for (final record in visibleLoans) {
+      portfolioPaise[record.branch] =
+          (portfolioPaise[record.branch] ?? 0) + record.principalPaise;
+    }
 
     return PopScope(
       canPop: false,
@@ -43,11 +82,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Exit App?'),
-            content: const Text('Do you want to exit SARVOOCCH Microcare?'),
+            content: const Text('Do you want to exit Sarvoocch Saathi?'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Stay')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Stay'),
+              ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F766E),
+                ),
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('Exit'),
               ),
@@ -59,358 +103,420 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       },
       child: Scaffold(
-      appBar: const CustomAppBar(title: 'SARVOOCCH Microcare Portal'),
-      drawer: const CustomDrawer(currentRoute: '/dashboard'),
-      body: RefreshIndicator(
-        onRefresh: () => loan.fetchAll(),
-        color: AppTheme.tealPrimary,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Welcome Banner
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppTheme.tealPrimary, AppTheme.tealDark],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.tealPrimary.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+        appBar: const CustomAppBar(title: 'Sarvoocch Saathi'),
+        drawer: const CustomDrawer(currentRoute: '/dashboard'),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            final activeUser = context.read<AuthProvider>().currentUser;
+            if (activeUser != null) {
+              await loan.fetchAll(actorUserId: activeUser.id);
+            }
+          },
+          color: AppTheme.tealPrimary,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Welcome Banner
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.tealPrimary, AppTheme.tealDark],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: Colors.white.withOpacity(0.2),
-                      child: const Icon(Icons.person, color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome, ${user?.name ?? "Officer"}!',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Role: ${user?.roleDisplay ?? ""} • Branch: ${user?.branch ?? "Head Office"}',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.tealPrimary.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              // KPI Grid
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 1.35,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  KpiCard(
-                    title: 'Total Disbursed',
-                    value: currencyFormat.format(loan.totalDisbursed),
-                    icon: Icons.account_balance_wallet,
-                    iconColor: AppTheme.tealPrimary,
-                    subtitle: '${loan.loans.length} Total Loans',
-                    subtitleColor: AppTheme.tealDark,
-                    onTap: () => Navigator.pushNamed(context, '/loans'),
+                    ],
                   ),
-                  KpiCard(
-                    title: 'Outstanding Bal',
-                    value: currencyFormat.format(loan.totalOutstanding),
-                    icon: Icons.trending_up,
-                    iconColor: AppTheme.info,
-                    subtitle: '${loan.activeLoansCount} Active Borrowers',
-                    subtitleColor: AppTheme.info,
-                    onTap: () => Navigator.pushNamed(context, '/loans'),
-                  ),
-                  KpiCard(
-                    title: 'Overdue Amount',
-                    value: currencyFormat.format(loan.totalOverdue),
-                    icon: Icons.warning_amber_rounded,
-                    iconColor: AppTheme.danger,
-                    subtitle: '${loan.overdueLoansCount} Loan In Default',
-                    subtitleColor: AppTheme.danger,
-                    onTap: () => Navigator.pushNamed(context, '/loans'),
-                  ),
-                  KpiCard(
-                    title: 'Recovery Rate',
-                    value: '${loan.recoveryRate}%',
-                    icon: Icons.check_circle_outline,
-                    iconColor: AppTheme.success,
-                    subtitle: 'Collection Efficiency',
-                    subtitleColor: AppTheme.success,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              // Quick Action Bar
-              const Text(
-                'QUICK ACTIONS',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textSecondary,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildActionButton(
-                      label: 'New Customer (KYC)',
-                      icon: Icons.badge_outlined,
-                      color: AppTheme.tealPrimary,
-                      onTap: () => Navigator.pushNamed(context, '/kyc-form'),
-                    ),
-                    const SizedBox(width: 10),
-                    _buildActionButton(
-                      label: 'Pre-GRT Group',
-                      icon: Icons.groups_outlined,
-                      color: Colors.indigo,
-                      onTap: () => Navigator.pushNamed(context, '/pregrt'),
-                    ),
-                    const SizedBox(width: 10),
-                    _buildActionButton(
-                      label: 'Apply Loan',
-                      icon: Icons.note_add_outlined,
-                      color: Colors.teal.shade700,
-                      onTap: () => Navigator.pushNamed(context, '/apply'),
-                    ),
-                    const SizedBox(width: 10),
-                    _buildActionButton(
-                      label: 'Punch Attendance',
-                      icon: Icons.access_time_outlined,
-                      color: Colors.orange.shade800,
-                      onTap: () => Navigator.pushNamed(context, '/attendance'),
-                    ),
-                    const SizedBox(width: 10),
-                    _buildActionButton(
-                      label: 'Cloud DB Sync',
-                      icon: Icons.cloud_sync_outlined,
-                      color: Colors.purple.shade700,
-                      onTap: () => Navigator.pushNamed(context, '/cloud-quotes'),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Interactive Chart: Branch Portfolio
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Branch Portfolio Distribution',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                          ),
-                          Icon(Icons.pie_chart_outline, size: 20, color: AppTheme.tealPrimary),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Active disbursements across regional micro-branches',
-                        style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                      ),
-                      const SizedBox(height: 20),
-                      if (loan.branchPortfolio.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 30),
-                          child: Center(
-                            child: Text(
-                              'No branch portfolio data yet.',
-                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                            ),
-                          ),
-                        )
-                      else
-                        Builder(
-                          builder: (context) {
-                            final colors = [
-                              AppTheme.tealPrimary,
-                              AppTheme.tealLight,
-                              AppTheme.info,
-                              Colors.amber.shade700,
-                              Colors.purple.shade600,
-                              Colors.indigo.shade600,
-                            ];
-                            final total = loan.branchPortfolio.values.fold<double>(0.0, (a, b) => a + b);
-                            final entries = loan.branchPortfolio.entries.toList();
-
-                            return SizedBox(
-                              height: 180,
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    flex: 3,
-                                    child: PieChart(
-                                      PieChartData(
-                                        sectionsSpace: 3,
-                                        centerSpaceRadius: 36,
-                                        sections: List.generate(entries.length, (i) {
-                                          final val = entries[i].value;
-                                          final pct = total > 0 ? ((val / total) * 100).round() : 0;
-                                          return PieChartSectionData(
-                                            value: val,
-                                            title: '$pct%',
-                                            color: colors[i % colors.length],
-                                            radius: 40,
-                                            titleStyle: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
-                                          );
-                                        }),
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 3,
-                                    child: SingleChildScrollView(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: List.generate(entries.length, (i) {
-                                          final bName = entries[i].key;
-                                          final amt = entries[i].value;
-                                          final formatted = amt >= 1000
-                                              ? '₹${(amt / 1000).toStringAsFixed(0)}k'
-                                              : '₹${amt.toStringAsFixed(0)}';
-                                          return Padding(
-                                            padding: const EdgeInsets.only(bottom: 6),
-                                            child: _LegendItem(
-                                              color: colors[i % colors.length],
-                                              label: '$bName ($formatted)',
-                                            ),
-                                          );
-                                        }),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 24,
                         ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Welcome, ${user?.name ?? "Officer"}!',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Role: ${user?.roleDisplay ?? ""} • Branch: ${user?.branch ?? "Head Office"}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 18),
 
-              // Pipeline Applications
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'PIPELINE APPLICATIONS',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textSecondary,
-                      letterSpacing: 0.8,
+                // KPI Grid
+                GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 1.35,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    KpiCard(
+                      title: 'Total Disbursed',
+                      value: currencyFormat.format(
+                        CurrencyAmount.fromMinorUnits(totalDisbursedPaise),
+                      ),
+                      icon: Icons.account_balance_wallet,
+                      iconColor: AppTheme.tealPrimary,
+                      subtitle: '${visibleLoans.length} Total Loans',
+                      subtitleColor: AppTheme.tealDark,
+                      onTap: () => Navigator.pushNamed(context, '/loans'),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pushNamed(context, '/applications'),
-                    child: const Text('View All', style: TextStyle(color: AppTheme.tealPrimary, fontSize: 12)),
-                  ),
-                ],
-              ),
+                    KpiCard(
+                      title: 'Outstanding Bal',
+                      value: currencyFormat.format(
+                        CurrencyAmount.fromMinorUnits(totalOutstandingPaise),
+                      ),
+                      icon: Icons.trending_up,
+                      iconColor: AppTheme.info,
+                      subtitle:
+                          '${visibleLoans.where((record) => record.status == 'active').length} Active Borrowers',
+                      subtitleColor: AppTheme.info,
+                      onTap: () => Navigator.pushNamed(context, '/loans'),
+                    ),
+                    KpiCard(
+                      title: 'Loans with overdue',
+                      value: '$overdueCount',
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: AppTheme.danger,
+                      subtitle: 'Installment status',
+                      subtitleColor: AppTheme.danger,
+                      onTap: () => Navigator.pushNamed(context, '/loans'),
+                    ),
+                    KpiCard(
+                      title: 'Recovery Rate',
+                      value: '—',
+                      icon: Icons.check_circle_outline,
+                      iconColor: AppTheme.success,
+                      subtitle: 'Reporting rules required',
+                      subtitleColor: AppTheme.success,
+                    ),
+                  ],
+                ),
 
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: loan.applications.take(3).length,
-                itemBuilder: (context, index) {
-                  final app = loan.applications[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      leading: CircleAvatar(
-                        backgroundColor: AppTheme.tealSurface,
-                        child: Text(
-                          '#${app.id}',
-                          style: const TextStyle(color: AppTheme.tealPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+                const SizedBox(height: 20),
+
+                // Quick Action Bar
+                const Text(
+                  'QUICK ACTIONS',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildActionButton(
+                        label: 'New Customer (KYC)',
+                        icon: Icons.badge_outlined,
+                        color: AppTheme.tealPrimary,
+                        onTap: () => Navigator.pushNamed(context, '/kyc-form'),
+                      ),
+                      const SizedBox(width: 10),
+                      _buildActionButton(
+                        label: 'Pre-GRT Group',
+                        icon: Icons.groups_outlined,
+                        color: Colors.indigo,
+                        onTap: () => Navigator.pushNamed(context, '/pregrt'),
+                      ),
+                      const SizedBox(width: 10),
+                      _buildActionButton(
+                        label: 'Apply Loan',
+                        icon: Icons.note_add_outlined,
+                        color: Colors.teal.shade700,
+                        onTap: () => Navigator.pushNamed(context, '/apply'),
+                      ),
+                      const SizedBox(width: 10),
+                      _buildActionButton(
+                        label: 'Punch Attendance',
+                        icon: Icons.access_time_outlined,
+                        color: Colors.orange.shade800,
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/attendance'),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Interactive Chart: Branch Portfolio
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Branch Portfolio Distribution',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Icon(
+                              Icons.pie_chart_outline,
+                              size: 20,
+                              color: AppTheme.tealPrimary,
+                            ),
+                          ],
                         ),
-                      ),
-                      title: Text(
-                        app.customerName ?? 'Applicant',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                      ),
-                      subtitle: Text(
-                        '${app.productName ?? "Loan"} • ${currencyFormat.format(app.amount)} (${app.tenure} mo)',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _statusColor(app.status).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          app.statusDisplay,
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Active disbursements across regional micro-branches',
                           style: TextStyle(
-                            color: _statusColor(app.status),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
                           ),
                         ),
-                      ),
-                      onTap: () => Navigator.pushNamed(context, '/applications'),
+                        const SizedBox(height: 20),
+                        if (portfolioPaise.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 30),
+                            child: Center(
+                              child: Text(
+                                'No branch portfolio data yet.',
+                                style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Builder(
+                            builder: (context) {
+                              final colors = [
+                                AppTheme.tealPrimary,
+                                AppTheme.tealLight,
+                                AppTheme.info,
+                                Colors.amber.shade700,
+                                Colors.purple.shade600,
+                                Colors.indigo.shade600,
+                              ];
+                              final totalPaise = portfolioPaise.values
+                                  .fold<int>(0, (sum, amount) => sum + amount);
+                              final entries = portfolioPaise.entries.toList();
+
+                              return SizedBox(
+                                height: 180,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: PieChart(
+                                        PieChartData(
+                                          sectionsSpace: 3,
+                                          centerSpaceRadius: 36,
+                                          sections: List.generate(
+                                            entries.length,
+                                            (i) {
+                                              final valPaise = entries[i].value;
+                                              final pct = totalPaise > 0
+                                                  ? ((valPaise / totalPaise) *
+                                                            100)
+                                                        .round()
+                                                  : 0;
+                                              return PieChartSectionData(
+                                                value:
+                                                    CurrencyAmount.fromMinorUnits(
+                                                      valPaise,
+                                                    ),
+                                                title: '$pct%',
+                                                color:
+                                                    colors[i % colors.length],
+                                                radius: 40,
+                                                titleStyle: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: List.generate(entries.length, (
+                                            i,
+                                          ) {
+                                            final bName = entries[i].key;
+                                            final amt = entries[i].value;
+                                            final formatted = amt >= 1000
+                                                ? '₹${(amt / 1000).toStringAsFixed(0)}k'
+                                                : '₹${amt.toStringAsFixed(0)}';
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 6,
+                                              ),
+                                              child: _LegendItem(
+                                                color:
+                                                    colors[i % colors.length],
+                                                label: '$bName ($formatted)',
+                                              ),
+                                            );
+                                          }),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                      ],
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-            ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Pipeline Applications
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'PIPELINE APPLICATIONS',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textSecondary,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/applications'),
+                      child: const Text(
+                        'View All',
+                        style: TextStyle(
+                          color: AppTheme.tealPrimary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: visibleApplications.take(3).length,
+                  itemBuilder: (context, index) {
+                    final app = visibleApplications[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 4,
+                        ),
+                        leading: CircleAvatar(
+                          backgroundColor: AppTheme.tealSurface,
+                          child: Text(
+                            '#${app.id}',
+                            style: const TextStyle(
+                              color: AppTheme.tealPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          app.customerName ?? 'Applicant',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${app.productName ?? "Loan"} • ${currencyFormat.format(app.amount)} (${app.tenure} mo)',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _statusColor(app.status).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            app.statusDisplay,
+                            style: TextStyle(
+                              color: _statusColor(app.status),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/applications'),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
-      ),
-    ), // end Scaffold
+      ), // end Scaffold
     ); // end PopScope
   }
 
@@ -486,7 +592,10 @@ class _LegendItem extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500),
+        ),
       ],
     );
   }

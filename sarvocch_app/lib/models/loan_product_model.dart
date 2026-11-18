@@ -1,3 +1,5 @@
+import '../services/currency_amount.dart';
+
 class LoanProductModel {
   final int id;
   final String name;
@@ -28,10 +30,10 @@ class LoanProductModel {
       id: map['id'] as int,
       name: map['name'] as String,
       rate: (map['rate'] as num).toDouble(),
-      minAmt: (map['min_amt'] as num).toDouble(),
-      maxAmt: (map['max_amt'] as num).toDouble(),
-      minTenure: (map['min_tenure'] as int?) ?? 6,
-      maxTenure: (map['max_tenure'] as int?) ?? 24,
+      minAmt: CurrencyAmount.readStoredValue(map, 'min_amt_paise', 'min_amt'),
+      maxAmt: CurrencyAmount.readStoredValue(map, 'max_amt_paise', 'max_amt'),
+      minTenure: (map['min_tenure'] as int?) ?? 0,
+      maxTenure: (map['max_tenure'] as int?) ?? 0,
       method: (map['method'] ?? 'reducing') as String,
       feePct: (map['fee_pct'] as num).toDouble(),
       active: (map['active'] as int?) ?? 1,
@@ -44,7 +46,9 @@ class LoanProductModel {
       'name': name,
       'rate': rate,
       'min_amt': minAmt,
+      'min_amt_paise': CurrencyAmount.toMinorUnits(minAmt),
       'max_amt': maxAmt,
+      'max_amt_paise': CurrencyAmount.toMinorUnits(maxAmt),
       'min_tenure': minTenure,
       'max_tenure': maxTenure,
       'method': method,

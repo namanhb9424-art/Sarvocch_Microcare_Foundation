@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
+import '../../providers/auth_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
@@ -14,9 +16,14 @@ class ApplicationsScreen extends StatefulWidget {
   State<ApplicationsScreen> createState() => _ApplicationsScreenState();
 }
 
-class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTickerProviderStateMixin {
+class _ApplicationsScreenState extends State<ApplicationsScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final currencyFormat = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
 
   final List<String> _stages = [
     'all',
@@ -42,7 +49,13 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
   @override
   Widget build(BuildContext context) {
     final loanProv = context.watch<LoanProvider>();
-    final allApps = loanProv.applications;
+    final user = context.watch<AuthProvider>().currentUser;
+    final allApps = loanProv.applications.where((application) {
+      if (user == null) return false;
+      if (user.role == 'admin') return true;
+      if (user.role == 'field_agent') return application.agentId == user.id;
+      return application.branch == user.branch;
+    }).toList();
 
     return Scaffold(
       appBar: CustomAppBar(
@@ -67,7 +80,10 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
               unselectedLabelColor: AppTheme.textSecondary,
               indicatorColor: AppTheme.tealPrimary,
               indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
               tabs: const [
                 Tab(text: 'All'),
                 Tab(text: 'Submitted'),
@@ -79,21 +95,26 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
             ),
           ),
           const Divider(height: 1, color: AppTheme.border),
-
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: _stages.map((stage) {
                 final filtered = stage == 'all'
                     ? allApps
-                    : allApps.where((a) => a.status.toLowerCase() == stage).toList();
+                    : allApps
+                          .where((a) => a.status.toLowerCase() == stage)
+                          .toList();
 
                 if (filtered.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.folder_open, size: 54, color: Colors.grey.shade300),
+                        Icon(
+                          Icons.folder_open,
+                          size: 54,
+                          color: Colors.grey.shade300,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'No applications in ${stage.replaceAll("_", " ").toUpperCase()}',
@@ -116,7 +137,8 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ApplicationDetailScreen(application: app),
+                              builder: (_) =>
+                                  ApplicationDetailScreen(application: app),
                             ),
                           );
                         },
@@ -127,7 +149,8 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
@@ -142,14 +165,21 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
                                       const SizedBox(width: 8),
                                       Text(
                                         app.customerName ?? 'Applicant',
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 15,
+                                        ),
                                       ),
                                     ],
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: _statusColor(app.status).withOpacity(0.12),
+                                      color: _statusColor(app.status)
+                                          .withOpacity(0.12),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
@@ -165,7 +195,8 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
                               ),
                               const SizedBox(height: 8),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     currencyFormat.format(app.amount),
@@ -177,7 +208,10 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
                                   ),
                                   Text(
                                     '${app.productName ?? "Loan"} • ${app.tenure} Months',
-                                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -185,20 +219,34 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> with SingleTick
                               const Divider(height: 1, color: AppTheme.border),
                               const SizedBox(height: 8),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Monthly Savings: ₹${app.netSaving?.toStringAsFixed(0) ?? "15,000"}',
-                                    style: const TextStyle(fontSize: 11.5, color: AppTheme.success, fontWeight: FontWeight.w600),
+                                    app.netSaving == null
+                                        ? 'Monthly net saving: Not recorded'
+                                        : 'Monthly net saving: ₹${app.netSaving!.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      color: AppTheme.success,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                   Row(
                                     children: [
                                       Text(
                                         'Branch: ${app.branch}',
-                                        style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: AppTheme.textSecondary,
+                                        ),
                                       ),
                                       const SizedBox(width: 4),
-                                      const Icon(Icons.chevron_right, size: 16, color: AppTheme.textMuted),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        size: 16,
+                                        color: AppTheme.textMuted,
+                                      ),
                                     ],
                                   ),
                                 ],

@@ -40,7 +40,7 @@ class AttendanceRequestModel {
   final String reason;
   final String status; // pending, approved, rejected
   final String approverRole;
-  final int approverId;
+  final int? approverId;
   final String requestedAt;
   final String? decidedBy;
   final String? decidedAt;
@@ -76,7 +76,7 @@ class AttendanceRequestModel {
       reason: (map['reason'] ?? '') as String,
       status: (map['status'] ?? 'pending') as String,
       approverRole: (map['approver_role'] ?? 'manager') as String,
-      approverId: (map['approver_id'] as int?) ?? 1,
+      approverId: map['approver_id'] as int?,
       requestedAt: (map['requested_at'] ?? '') as String,
       decidedBy: map['decided_by'] as String?,
       decidedAt: map['decided_at'] as String?,

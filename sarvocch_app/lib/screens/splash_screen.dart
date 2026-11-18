@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
-import '../providers/customer_provider.dart';
-import '../providers/loan_provider.dart';
-import '../providers/pregrt_provider.dart';
-import '../providers/cloud_quote_provider.dart';
 import '../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -14,10 +11,12 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  String? _loadError;
 
   @override
   void initState() {
@@ -27,13 +26,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       duration: const Duration(milliseconds: 1200),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
-    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.85,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
 
     _controller.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -45,25 +46,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   Future<void> _initializeApp() async {
     final auth = context.read<AuthProvider>();
-    final loan = context.read<LoanProvider>();
-    final customer = context.read<CustomerProvider>();
-    final pregrt = context.read<PreGrtProvider>();
-    final cloud = context.read<CloudQuoteProvider>();
 
-    await Future.wait([
-      auth.init(),
-      loan.fetchAll(),
-      customer.fetchCustomers(),
-      pregrt.fetchPreGrts(),
-    ]);
+    await auth.init();
 
-    cloud.init();
+    if (auth.initializationError != null) {
+      if (mounted) {
+        setState(() {
+          _loadError = auth.initializationError;
+        });
+      }
+      return;
+    }
 
     await Future.delayed(const Duration(milliseconds: 1400));
 
     if (!mounted) return;
 
-    if (auth.isAuthenticated) {
+    if (auth.needsInitialSetup) {
+      Navigator.pushReplacementNamed(context, '/setup');
+    } else if (auth.isAuthenticated) {
       if (auth.currentUser?.role == 'customer') {
         Navigator.pushReplacementNamed(context, '/portal');
       } else {
@@ -82,6 +83,45 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    if (_loadError != null) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.lock_outline,
+                      size: 48,
+                      color: AppTheme.tealPrimary,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Local data is locked',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '$_loadError Contact support before clearing app data or reinstalling; the original database may still be recoverable.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppTheme.tealPrimary,
       body: Center(
@@ -118,7 +158,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'SARVOOCCH Microcare',
+                  'Sarvoocch Saathi',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 26,
@@ -128,7 +168,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Foundation • Micro Finance Portal',
+                  'SARVOOCCH Microcare Foundation • Finance & Field Operations',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,
@@ -147,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Loading SQLite & Cloud Config...',
+                  'Opening secure local data...',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.75),
                     fontSize: 12,

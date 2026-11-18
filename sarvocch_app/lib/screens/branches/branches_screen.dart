@@ -1,6 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../data/database_helper.dart';
+import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/custom_drawer.dart';
@@ -15,7 +21,11 @@ class BranchesScreen extends StatefulWidget {
 class _BranchesScreenState extends State<BranchesScreen> {
   List<Map<String, dynamic>> _branches = [];
   bool _loading = true;
-  final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final currency = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
 
   @override
   void initState() {
@@ -25,78 +35,130 @@ class _BranchesScreenState extends State<BranchesScreen> {
 
   Future<void> _loadBranches() async {
     final db = await DatabaseHelper.instance.database;
-    final branchRows = await db.query('branches', orderBy: 'id ASC');
+    final user = context.read<AuthProvider>().currentUser;
+    final branchData = user == null
+        ? null
+        : await db.transaction<List<Map<String, dynamic>>?>((txn) async {
+            final actors = await txn.query(
+              'users',
+              columns: ['role', 'branch', 'auth_status'],
+              where: 'id = ?',
+              whereArgs: [user.id],
+              limit: 1,
+            );
+            if (actors.isEmpty || actors.first['auth_status'] != 'active') {
+              return null;
+            }
+            final role = actors.first['role'] as String? ?? '';
+            final assignedBranch = (actors.first['branch'] as String? ?? '')
+                .trim();
+            if (!{'admin', 'manager'}.contains(role) ||
+                (role == 'manager' && assignedBranch.isEmpty)) {
+              return null;
+            }
 
-    List<Map<String, dynamic>> enhanced = [];
-    for (var b in branchRows) {
-      final name = b['name'] as String;
-      
-      // Calculate branch statistics
-      final staffCount = (await db.rawQuery(
-        'SELECT COUNT(*) as c FROM employees WHERE branch = ? AND status != ?',
-        [name, 'exited'],
-      )).first['c'] as int? ?? 0;
+            final branchRows = await txn.query(
+              'branches',
+              where: role == 'admin' ? null : 'name = ?',
+              whereArgs: role == 'admin' ? null : [assignedBranch],
+              orderBy: 'id ASC',
+            );
+            final enhanced = <Map<String, dynamic>>[];
+            for (final branch in branchRows) {
+              final name = branch['name'] as String;
+              final staffCount =
+                  (await txn.rawQuery(
+                        'SELECT COUNT(*) as c FROM employees WHERE branch = ? AND status != ?',
+                        [name, 'exited'],
+                      )).first['c']
+                      as int? ??
+                  0;
+              final customerCount =
+                  (await txn.rawQuery(
+                        'SELECT COUNT(*) as c FROM customers WHERE branch = ?',
+                        [name],
+                      )).first['c']
+                      as int? ??
+                  0;
+              final activeLoans =
+                  (await txn.rawQuery(
+                        'SELECT COUNT(*) as c FROM loans WHERE branch = ? AND status = ?',
+                        [name, 'active'],
+                      )).first['c']
+                      as int? ??
+                  0;
+              final disbursedMinor =
+                  (await txn.rawQuery(
+                        '''
+                SELECT COALESCE(SUM(COALESCE(
+                  principal_paise, CAST(ROUND(principal * 100) AS INTEGER)
+                )), 0) AS amount_paise
+                FROM loans WHERE branch = ?
+                ''',
+                        [name],
+                      )).first['amount_paise']
+                      as num? ??
+                  0;
+              final overdueCount =
+                  (await txn.rawQuery(
+                        '''
+                SELECT COUNT(DISTINCT l.id) as c
+                FROM schedule s
+                JOIN loans l ON l.id = s.loan_id
+                WHERE s.paid = 0 AND s.due_date < date('now') AND l.branch = ?
+              ''',
+                        [name],
+                      )).first['c']
+                      as int? ??
+                  0;
 
-      final custCount = (await db.rawQuery(
-        'SELECT COUNT(*) as c FROM customers WHERE branch = ?',
-        [name],
-      )).first['c'] as int? ?? 0;
-
-      final activeLoans = (await db.rawQuery(
-        'SELECT COUNT(*) as c FROM loans WHERE branch = ? AND status = ?',
-        [name, 'active'],
-      )).first['c'] as int? ?? 0;
-
-      final disbursedSum = (await db.rawQuery(
-        'SELECT IFNULL(SUM(principal), 0) as s FROM loans WHERE branch = ?',
-        [name],
-      )).first['s'] as num? ?? 0.0;
-
-      final overdueCount = (await db.rawQuery('''
-        SELECT COUNT(DISTINCT l.id) as c 
-        FROM schedule s 
-        JOIN loans l ON l.id = s.loan_id 
-        WHERE s.paid = 0 AND s.due_date < date('now') AND l.branch = ?
-      ''', [name])).first['c'] as int? ?? 0;
-
-      final map = Map<String, dynamic>.from(b);
-      map['staff_count'] = staffCount;
-      map['customer_count'] = custCount;
-      map['active_loans'] = activeLoans;
-      map['total_disbursed'] = disbursedSum.toDouble();
-      map['overdue_loans'] = overdueCount;
-      enhanced.add(map);
-    }
+              enhanced.add({
+                ...branch,
+                'staff_count': staffCount,
+                'customer_count': customerCount,
+                'active_loans': activeLoans,
+                'total_disbursed': disbursedMinor.toDouble() / 100,
+                'overdue_loans': overdueCount,
+              });
+            }
+            return enhanced;
+          });
 
     if (mounted) {
       setState(() {
-        _branches = enhanced;
+        _branches = branchData ?? [];
         _loading = false;
       });
     }
   }
 
   void _showAddBranchDialog() {
+    if (context.read<AuthProvider>().currentUser?.role != 'admin') return;
     final nameCtrl = TextEditingController();
     final codeCtrl = TextEditingController();
     final addressCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final headCtrl = TextEditingController();
-    final latCtrl = TextEditingController(text: '22.7533');
-    final lngCtrl = TextEditingController(text: '75.8937');
-    final radiusCtrl = TextEditingController(text: '2000');
+    final latCtrl = TextEditingController();
+    final lngCtrl = TextEditingController();
+    final radiusCtrl = TextEditingController();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add New Branch Office', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        title: const Text(
+          'Add New Branch Office',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Branch Name (e.g. Bhopal - MP Nagar) *'),
+                decoration: const InputDecoration(
+                  labelText: 'Branch Name (e.g. Bhopal - MP Nagar) *',
+                ),
               ),
               const SizedBox(height: 10),
               Row(
@@ -104,7 +166,9 @@ class _BranchesScreenState extends State<BranchesScreen> {
                   Expanded(
                     child: TextField(
                       controller: codeCtrl,
-                      decoration: const InputDecoration(labelText: 'Branch Code (BHO-02)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Branch Code (BHO-02)',
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -125,7 +189,9 @@ class _BranchesScreenState extends State<BranchesScreen> {
               const SizedBox(height: 10),
               TextField(
                 controller: headCtrl,
-                decoration: const InputDecoration(labelText: 'Branch Head Manager Name'),
+                decoration: const InputDecoration(
+                  labelText: 'Branch Head Manager Name',
+                ),
               ),
               const SizedBox(height: 10),
               Row(
@@ -133,16 +199,24 @@ class _BranchesScreenState extends State<BranchesScreen> {
                   Expanded(
                     child: TextField(
                       controller: latCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'GPS Latitude'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'GPS Latitude',
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
                       controller: lngCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'GPS Longitude'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'GPS Longitude',
+                      ),
                     ),
                   ),
                 ],
@@ -151,30 +225,109 @@ class _BranchesScreenState extends State<BranchesScreen> {
               TextField(
                 controller: radiusCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Punch Radius (Meters, default: 2000)'),
+                decoration: const InputDecoration(
+                  labelText: 'Punch Radius (Meters, optional)',
+                ),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               if (nameCtrl.text.trim().isEmpty) return;
-              final db = await DatabaseHelper.instance.database;
-              await db.insert('branches', {
-                'name': nameCtrl.text.trim(),
-                'code': codeCtrl.text.trim(),
-                'address': addressCtrl.text.trim(),
-                'phone': phoneCtrl.text.trim(),
-                'head_name': headCtrl.text.trim(),
-                'lat': double.tryParse(latCtrl.text) ?? 22.7533,
-                'lng': double.tryParse(lngCtrl.text) ?? 75.8937,
-                'radius_m': int.tryParse(radiusCtrl.text) ?? 2000,
-                'active': 1,
-              });
-              if (ctx.mounted) Navigator.pop(ctx);
-              await _loadBranches();
+              final latitude = double.tryParse(latCtrl.text.trim());
+              final longitude = double.tryParse(lngCtrl.text.trim());
+              final hasCoordinates = latitude != null && longitude != null;
+              final radius = int.tryParse(radiusCtrl.text.trim()) ?? 0;
+              final enteredCoordinates =
+                  latCtrl.text.trim().isNotEmpty ||
+                  lngCtrl.text.trim().isNotEmpty;
+              if ((enteredCoordinates &&
+                      (!hasCoordinates ||
+                          latitude < -90 ||
+                          latitude > 90 ||
+                          longitude < -180 ||
+                          longitude > 180 ||
+                          radius < 50 ||
+                          radius > 10000)) ||
+                  (hasCoordinates && (radius < 50 || radius > 10000))) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Enter valid GPS coordinates and a radius between 50 and 10,000 meters, or leave all geofence fields blank.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              final user = context.read<AuthProvider>().currentUser;
+              if (user == null) return;
+              try {
+                final db = await DatabaseHelper.instance.database;
+                final nowIso = DateTime.now().toIso8601String().substring(
+                  0,
+                  19,
+                );
+                await db.transaction((txn) async {
+                  final actors = await txn.query(
+                    'users',
+                    columns: ['name', 'role', 'auth_status'],
+                    where: 'id = ?',
+                    whereArgs: [user.id],
+                    limit: 1,
+                  );
+                  if (actors.isEmpty ||
+                      actors.first['auth_status'] != 'active' ||
+                      actors.first['role'] != 'admin') {
+                    throw StateError(
+                      'Only an active administrator can add branches.',
+                    );
+                  }
+                  final branchId = await txn.insert('branches', {
+                    'name': nameCtrl.text.trim(),
+                    'code': codeCtrl.text.trim(),
+                    'address': addressCtrl.text.trim(),
+                    'phone': phoneCtrl.text.trim(),
+                    'head_name': headCtrl.text.trim(),
+                    'lat': hasCoordinates ? latitude : null,
+                    'lng': hasCoordinates ? longitude : null,
+                    'radius_m': radius > 0 ? radius : 0,
+                    'active': 1,
+                  });
+                  await txn.insert('audit_log', {
+                    'operation_id': const Uuid().v4(),
+                    'entity_type': 'branch',
+                    'entity_id': branchId,
+                    'action': 'branch_created',
+                    'actor_user_id': user.id,
+                    'actor_role': actors.first['role'],
+                    'actor_name': actors.first['name'],
+                    'occurred_at': nowIso,
+                    'details': jsonEncode({
+                      'name': nameCtrl.text.trim(),
+                      'code': codeCtrl.text.trim(),
+                      'geofence_configured': hasCoordinates,
+                    }),
+                  });
+                });
+                if (ctx.mounted) Navigator.pop(ctx);
+                await _loadBranches();
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Branch was not saved. Check permissions and whether the branch name is already in use.',
+                      ),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Save Branch'),
           ),
@@ -187,7 +340,9 @@ class _BranchesScreenState extends State<BranchesScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -199,40 +354,89 @@ class _BranchesScreenState extends State<BranchesScreen> {
                 CircleAvatar(
                   backgroundColor: AppTheme.tealSurface,
                   radius: 22,
-                  child: const Icon(Icons.business, color: AppTheme.tealPrimary),
+                  child: const Icon(
+                    Icons.business,
+                    color: AppTheme.tealPrimary,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(b['name'] as String, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                      Text('Code: ${b['code']} • Branch Head: ${b['head_name'] ?? "Not Assigned"}',
-                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                      Text(
+                        b['name'] as String,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        'Code: ${b['code']} • Branch Head: ${b['head_name'] ?? "Not Assigned"}',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 12),
-            const Text('BRANCH PORTFOLIO & STATS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecondary)),
+            const Text(
+              'BRANCH PORTFOLIO & STATS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _statBox('Active Staff', '${b['staff_count']}', Icons.badge_outlined)),
+                Expanded(
+                  child: _statBox(
+                    'Active Staff',
+                    '${b['staff_count']}',
+                    Icons.badge_outlined,
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _statBox('Borrowers', '${b['customer_count']}', Icons.people_outline)),
+                Expanded(
+                  child: _statBox(
+                    'Borrowers',
+                    '${b['customer_count']}',
+                    Icons.people_outline,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _statBox('Active Loans', '${b['active_loans']}', Icons.monetization_on_outlined)),
+                Expanded(
+                  child: _statBox(
+                    'Active Loans',
+                    '${b['active_loans']}',
+                    Icons.monetization_on_outlined,
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _statBox('Overdue', '${b['overdue_loans']}', Icons.warning_amber_outlined, isDanger: (b['overdue_loans'] as int) > 0)),
+                Expanded(
+                  child: _statBox(
+                    'Overdue',
+                    '${b['overdue_loans']}',
+                    Icons.warning_amber_outlined,
+                    isDanger: (b['overdue_loans'] as int) > 0,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -246,13 +450,30 @@ class _BranchesScreenState extends State<BranchesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Disbursed Portfolio: ${currency.format(b['total_disbursed'])}',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.tealPrimary)),
+                  Text(
+                    'Disbursed Portfolio: ${currency.format(b['total_disbursed'])}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppTheme.tealPrimary,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('Address: ${b['address']}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                  Text(
+                    'Address: ${b['address']}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('GPS: ${b['lat']}, ${b['lng']} (Radius: ${b['radius_m']}m)',
-                      style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted)),
+                  Text(
+                    'GPS: ${b['lat']}, ${b['lng']} (Radius: ${b['radius_m']}m)',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -263,7 +484,12 @@ class _BranchesScreenState extends State<BranchesScreen> {
     );
   }
 
-  Widget _statBox(String label, String value, IconData icon, {bool isDanger = false}) {
+  Widget _statBox(
+    String label,
+    String value,
+    IconData icon, {
+    bool isDanger = false,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -273,13 +499,30 @@ class _BranchesScreenState extends State<BranchesScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: isDanger ? AppTheme.danger : AppTheme.tealPrimary),
+          Icon(
+            icon,
+            size: 20,
+            color: isDanger ? AppTheme.danger : AppTheme.tealPrimary,
+          ),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 10.5, color: AppTheme.textSecondary)),
-              Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: isDanger ? AppTheme.danger : AppTheme.textPrimary)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: isDanger ? AppTheme.danger : AppTheme.textPrimary,
+                ),
+              ),
             ],
           ),
         ],
@@ -292,58 +535,96 @@ class _BranchesScreenState extends State<BranchesScreen> {
     return Scaffold(
       appBar: const CustomAppBar(title: 'Branch Offices & Portfolios'),
       drawer: const CustomDrawer(currentRoute: '/branches'),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppTheme.tealPrimary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_business),
-        label: const Text('Add Branch'),
-        onPressed: _showAddBranchDialog,
-      ),
+      floatingActionButton:
+          context.watch<AuthProvider>().currentUser?.role == 'admin'
+          ? FloatingActionButton.extended(
+              backgroundColor: AppTheme.tealPrimary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_business),
+              label: const Text('Add Branch'),
+              onPressed: _showAddBranchDialog,
+            )
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _branches.isEmpty
-              ? const Center(child: Text('No branch offices registered.'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _branches.length,
-                  itemBuilder: (context, index) {
-                    final b = _branches[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(14),
-                        leading: CircleAvatar(
-                          backgroundColor: AppTheme.tealSurface,
-                          child: const Icon(Icons.account_balance, color: AppTheme.tealPrimary),
+          ? const Center(child: Text('No branch offices registered.'))
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _branches.length,
+              itemBuilder: (context, index) {
+                final b = _branches[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(14),
+                    leading: CircleAvatar(
+                      backgroundColor: AppTheme.tealSurface,
+                      child: const Icon(
+                        Icons.account_balance,
+                        color: AppTheme.tealPrimary,
+                      ),
+                    ),
+                    title: Text(
+                      b['name'] as String,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          '${b['address']}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
-                        title: Text(
-                          b['name'] as String,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        const SizedBox(height: 4),
+                        Row(
                           children: [
-                            const SizedBox(height: 4),
-                            Text('${b['address']}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Text('Staff: ${b['staff_count']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                                const SizedBox(width: 10),
-                                Text('Active Loans: ${b['active_loans']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.tealPrimary)),
-                                const SizedBox(width: 10),
-                                if ((b['overdue_loans'] as int) > 0)
-                                  Text('Overdue: ${b['overdue_loans']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.danger)),
-                              ],
+                            Text(
+                              'Staff: ${b['staff_count']}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Active Loans: ${b['active_loans']}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.tealPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            if ((b['overdue_loans'] as int) > 0)
+                              Text(
+                                'Overdue: ${b['overdue_loans']}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.danger,
+                                ),
+                              ),
                           ],
                         ),
-                        trailing: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
-                        onTap: () => _showBranchDetailsSheet(b),
-                      ),
-                    );
-                  },
-                ),
+                      ],
+                    ),
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                      color: AppTheme.textSecondary,
+                    ),
+                    onTap: () => _showBranchDetailsSheet(b),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

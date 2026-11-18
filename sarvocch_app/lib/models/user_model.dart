@@ -9,6 +9,7 @@ class UserModel {
   final double? lat;
   final double? lng;
   final String? designation;
+  final bool mustChangePassword;
 
   UserModel({
     required this.id,
@@ -21,6 +22,7 @@ class UserModel {
     this.lat,
     this.lng,
     this.designation,
+    this.mustChangePassword = false,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
@@ -35,6 +37,7 @@ class UserModel {
       lat: (map['lat'] as num?)?.toDouble(),
       lng: (map['lng'] as num?)?.toDouble(),
       designation: map['designation'] as String?,
+      mustChangePassword: (map['must_change'] as int? ?? 0) == 1,
     );
   }
 
@@ -73,19 +76,57 @@ class UserModel {
     if (role == 'admin') return true;
 
     const managerPerms = {
-      'dashboard', 'crm', 'kyc', 'apply', 'applications', 'approve',
-      'disburse', 'loans', 'payments', 'field', 'employees', 'hrm',
-      'whatsapp', 'sync', 'calculator', 'products', 'kycform', 'pregrt', 'attendance'
+      'dashboard',
+      'profile',
+      'reports',
+      'crm',
+      'kyc',
+      'apply',
+      'applications',
+      'approve',
+      'disburse',
+      'loans',
+      'payments',
+      'field',
+      'employees',
+      'hrm',
+      'branches',
+      'whatsapp',
+      'sync',
+      'calculator',
+      'products',
+      'kycform',
+      'pregrt',
+      'attendance',
     };
     const underwriterPerms = {
-      'dashboard', 'crm', 'kyc', 'applications', 'approve', 'loans',
-      'calculator', 'pregrt', 'attendance'
+      'dashboard',
+      'profile',
+      'crm',
+      'kyc',
+      'applications',
+      'approve',
+      'loans',
+      'calculator',
+      'pregrt',
+      'attendance',
     };
     const fieldAgentPerms = {
-      'crm', 'kyc', 'apply', 'applications', 'field', 'sync',
-      'calculator', 'whatsapp', 'payments', 'kycform', 'pregrt', 'attendance'
+      'crm',
+      'profile',
+      'kyc',
+      'apply',
+      'applications',
+      'field',
+      'sync',
+      'calculator',
+      'whatsapp',
+      'payments',
+      'kycform',
+      'pregrt',
+      'attendance',
     };
-    const customerPerms = {'portal', 'payments', 'calculator'};
+    const customerPerms = {'portal', 'payments', 'calculator', 'profile'};
 
     switch (role) {
       case 'manager':

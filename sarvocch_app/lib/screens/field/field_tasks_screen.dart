@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../data/database_helper.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/auth_provider.dart';
+import '../../providers/loan_provider.dart';
+import '../../services/currency_amount.dart';
 import '../../services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
@@ -13,12 +17,17 @@ class FieldTasksScreen extends StatefulWidget {
   State<FieldTasksScreen> createState() => _FieldTasksScreenState();
 }
 
-class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerProviderStateMixin {
+class _FieldTasksScreenState extends State<FieldTasksScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<Map<String, dynamic>> _tasks = [];
   bool _loading = true;
   bool _syncing = false;
-  final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final currency = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
 
   @override
   void initState() {
@@ -34,13 +43,19 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
   }
 
   Future<void> _loadTasks() async {
-    final db = await DatabaseHelper.instance.database;
-    final results = await db.rawQuery('''
-      SELECT t.*, c.name as customer_name, c.phone as customer_phone
-      FROM tasks t
-      LEFT JOIN customers c ON t.customer_id = c.id
-      ORDER BY t.status ASC, t.id ASC
-    ''');
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _tasks = [];
+          _loading = false;
+        });
+      }
+      return;
+    }
+    final results = await context.read<LoanProvider>().getFieldTasks(
+      actorUserId: user.id,
+    );
     if (mounted) {
       setState(() {
         _tasks = results;
@@ -50,114 +65,216 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
   }
 
   Future<void> _markTaskDone(int taskId) async {
-    final collectedCtrl = TextEditingController(text: '5200');
-    final notesCtrl = TextEditingController(text: 'Collected in cash during center meeting');
+    final matches = _tasks.where((task) => task['id'] == taskId);
+    if (matches.isEmpty) return;
+    final task = matches.first;
+    final isCollection =
+        (task['ttype'] as String? ?? '').toLowerCase() == 'collection';
+    final actorId = context.read<AuthProvider>().currentUser?.id ?? 0;
+    final collectionCandidates = isCollection
+        ? await context.read<LoanProvider>().getCollectionCandidates(
+            taskId: taskId,
+            actorUserId: actorId,
+          )
+        : <Map<String, Object?>>[];
+    int? selectedLoanId = task['loan_id'] as int?;
+    if (selectedLoanId == null && collectionCandidates.length == 1) {
+      selectedLoanId = collectionCandidates.first['id'] as int?;
+    }
+    int? scheduleForLoan(int? loanId) {
+      for (final candidate in collectionCandidates) {
+        if (candidate['id'] == loanId) {
+          return candidate['next_schedule_id'] as int?;
+        }
+      }
+      return null;
+    }
 
-    showDialog(
+    int? selectedScheduleId = scheduleForLoan(selectedLoanId);
+    final collectedCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+
+    final completed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Record Field Collection / Visit'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: collectedCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount Collected (₹) *'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(
+            isCollection ? 'Record Collection / Visit' : 'Complete Field Visit',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isCollection) ...[
+                const Text(
+                  'Enter the full due installment only. Partial collection allocation is not configured.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                if (collectionCandidates.isEmpty)
+                  const Text(
+                    'No due installment is available for this task.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                if (collectionCandidates.length > 1) ...[
+                  DropdownButtonFormField<int>(
+                    value: selectedLoanId,
+                    decoration: const InputDecoration(labelText: 'Loan'),
+                    items: collectionCandidates.map((candidate) {
+                      final id = candidate['id'] as int;
+                      final dueAmount = CurrencyAmount.readStoredValue(
+                        candidate,
+                        'next_due_amount_paise',
+                        'next_due_amount',
+                      );
+                      final productName =
+                          candidate['product_name'] as String? ?? 'Loan';
+                      final dueDate =
+                          candidate['next_due_date'] as String? ??
+                          'unknown date';
+                      return DropdownMenuItem<int>(
+                        value: id,
+                        child: Text(
+                          '$productName #$id • ${currency.format(dueAmount)} • $dueDate',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (loanId) => setDialogState(() {
+                      selectedLoanId = loanId;
+                      selectedScheduleId = scheduleForLoan(loanId);
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                ] else if (collectionCandidates.length == 1) ...[
+                  Builder(
+                    builder: (context) {
+                      final candidate = collectionCandidates.first;
+                      final dueAmount = CurrencyAmount.readStoredValue(
+                        candidate,
+                        'next_due_amount_paise',
+                        'next_due_amount',
+                      );
+                      final dueDate =
+                          candidate['next_due_date'] as String? ??
+                          'unknown date';
+                      return Text(
+                        '${candidate['product_name'] ?? 'Loan'} • ${currency.format(dueAmount)} due $dueDate',
+                        style: const TextStyle(fontSize: 12),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                TextField(
+                  controller: collectedCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Cash collected (₹, leave blank for no payment)',
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              TextField(
+                controller: notesCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Field notes *'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: notesCtrl,
-              decoration: const InputDecoration(labelText: 'Field Notes'),
+            ElevatedButton(
+              onPressed: () async {
+                final collectedAmount = collectedCtrl.text.trim().isEmpty
+                    ? 0.0
+                    : double.tryParse(collectedCtrl.text.trim());
+                if (collectedAmount == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Enter a valid collection amount.'),
+                    ),
+                  );
+                  return;
+                }
+                if (isCollection &&
+                    collectedAmount > 0 &&
+                    collectionCandidates.length > 1 &&
+                    selectedLoanId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Select the collection loan.'),
+                    ),
+                  );
+                  return;
+                }
+                final actorId =
+                    context.read<AuthProvider>().currentUser?.id ?? 0;
+                final success = await context
+                    .read<LoanProvider>()
+                    .completeFieldTask(
+                      taskId: taskId,
+                      actorUserId: actorId,
+                      collectedAmount: collectedAmount,
+                      notes: notesCtrl.text,
+                      collectionLoanId: selectedLoanId,
+                      collectionScheduleId: selectedScheduleId,
+                    );
+                if (ctx.mounted && success) Navigator.pop(ctx, true);
+                if (ctx.mounted && !success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Task was not completed. Check assignment, due amount and task status.',
+                      ),
+                      backgroundColor: AppTheme.danger,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Record Done'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final db = await DatabaseHelper.instance.database;
-              final nowIso = DateTime.now().toIso8601String().substring(0, 19);
-              final todayStr = DateTime.now().toIso8601String().substring(0, 10);
-              final task = _tasks.firstWhere((t) => t['id'] == taskId, orElse: () => {});
-              final collectedAmount = double.tryParse(collectedCtrl.text) ?? 0.0;
-
-              await db.update(
-                'tasks',
-                {
-                  'status': 'done',
-                  'collected': collectedAmount,
-                  'notes': notesCtrl.text.trim(),
-                  'done_at': nowIso,
-                },
-                where: 'id = ?',
-                whereArgs: [taskId],
-              );
-
-              // If this is a collection task with a loan_id, record payment & mark schedule
-              if (task.isNotEmpty && task['loan_id'] != null && collectedAmount > 0) {
-                final loanId = task['loan_id'] as int;
-
-                final overdueRows = await db.query(
-                  'schedule',
-                  where: 'loan_id = ? AND paid = 0 AND due_date <= ?',
-                  whereArgs: [loanId, todayStr],
-                  orderBy: 'no ASC',
-                  limit: 1,
-                );
-
-                int? scheduleId;
-                if (overdueRows.isNotEmpty) {
-                  scheduleId = overdueRows.first['id'] as int?;
-                  await db.update(
-                    'schedule',
-                    {'paid': 1, 'paid_on': todayStr},
-                    where: 'id = ?',
-                    whereArgs: [scheduleId],
-                  );
-                }
-
-                await db.insert('payments', {
-                  'loan_id': loanId,
-                  'schedule_id': scheduleId ?? 0,
-                  'amount': collectedAmount,
-                  'channel': 'field_cash',
-                  'ref': 'FIELD${DateTime.now().millisecondsSinceEpoch}',
-                  'at': nowIso,
-                });
-
-                // Enqueue to offline sync
-                await SyncService().enqueueAction(
-                  userId: 4,
-                  action: 'field_collection',
-                  payload: {
-                    'loan_id': loanId,
-                    'amount': collectedAmount,
-                    'task_id': taskId,
-                    'notes': notesCtrl.text.trim(),
-                  },
-                );
-              }
-
-              if (ctx.mounted) Navigator.pop(ctx);
-              await _loadTasks();
-            },
-            child: const Text('Record Done'),
-          ),
-        ],
       ),
     );
+    collectedCtrl.dispose();
+    notesCtrl.dispose();
+
+    if (completed == true) {
+      await SyncService().updatePendingCount();
+      await _loadTasks();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Field task and offline sync record saved.'),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _triggerSync() async {
     setState(() => _syncing = true);
-    final success = await SyncService().triggerFullSync();
+    final sync = SyncService();
+    final success = await sync.triggerFullSync();
     setState(() => _syncing = false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Tasks & Collections synchronized successfully!' : 'Sync queued locally for transmission.'),
-          backgroundColor: AppTheme.success,
+          content: Text(
+            success
+                ? 'Tasks and collections synchronized.'
+                : sync.lastSyncStatus,
+          ),
+          backgroundColor: success ? AppTheme.success : AppTheme.warning,
         ),
       );
     }
@@ -171,7 +288,14 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
         actions: [
           IconButton(
             icon: _syncing
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
                 : const Icon(Icons.sync),
             tooltip: 'Sync Offline Queue',
             onPressed: _syncing ? null : _triggerSync,
@@ -189,8 +313,14 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
               unselectedLabelColor: AppTheme.textSecondary,
               indicatorColor: AppTheme.tealPrimary,
               tabs: const [
-                Tab(icon: Icon(Icons.format_list_bulleted, size: 20), text: 'Task List'),
-                Tab(icon: Icon(Icons.map_outlined, size: 20), text: 'Spatial Map View'),
+                Tab(
+                  icon: Icon(Icons.format_list_bulleted, size: 20),
+                  text: 'Task List',
+                ),
+                Tab(
+                  icon: Icon(Icons.map_outlined, size: 20),
+                  text: 'Spatial Map View',
+                ),
               ],
             ),
           ),
@@ -211,41 +341,84 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
                           return Card(
                             margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
                               leading: CircleAvatar(
-                                backgroundColor: isDone ? AppTheme.successLight : AppTheme.tealSurface,
+                                backgroundColor: isDone
+                                    ? AppTheme.successLight
+                                    : AppTheme.tealSurface,
                                 child: Icon(
-                                  isDone ? Icons.check : (t['ttype'] == 'collection' ? Icons.monetization_on : Icons.verified),
-                                  color: isDone ? AppTheme.success : AppTheme.tealPrimary,
+                                  isDone
+                                      ? Icons.check
+                                      : (t['ttype'] == 'collection'
+                                            ? Icons.monetization_on
+                                            : Icons.verified),
+                                  color: isDone
+                                      ? AppTheme.success
+                                      : AppTheme.tealPrimary,
                                   size: 20,
                                 ),
                               ),
-                              title: Text(t['title'] as String, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                              title: Text(
+                                t['title'] as String,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const SizedBox(height: 2),
                                   Text(
                                     'Borrower: ${t['customer_name'] ?? "N/A"} (${t['customer_phone'] ?? ""})',
-                                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary,
+                                    ),
                                   ),
                                   Text(
                                     'Location: ${t['lat']}, ${t['lng']} • Due: ${t['due_date']}',
-                                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textMuted,
+                                    ),
                                   ),
                                   if (isDone)
                                     Text(
-                                      'Collected: ${currency.format(t['collected'] ?? 0)} (${t['notes'] ?? ""})',
-                                      style: const TextStyle(fontSize: 11.5, color: AppTheme.success, fontWeight: FontWeight.w600),
+                                      'Collected: ${currency.format(CurrencyAmount.readStoredValue(t, 'collected_paise', 'collected'))} (${t['notes'] ?? ""})',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: AppTheme.success,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                 ],
                               ),
                               trailing: isDone
-                                  ? const Text('COMPLETED', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.w700, fontSize: 11))
+                                  ? const Text(
+                                      'COMPLETED',
+                                      style: TextStyle(
+                                        color: AppTheme.success,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
+                                      ),
+                                    )
                                   : ElevatedButton(
-                                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                                      onPressed: () => _markTaskDone(t['id'] as int),
-                                      child: const Text('Complete', style: TextStyle(fontSize: 12)),
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                      ),
+                                      onPressed: () =>
+                                          _markTaskDone(t['id'] as int),
+                                      child: const Text(
+                                        'Complete',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
                                     ),
                             ),
                           );
@@ -264,7 +437,9 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
                               decoration: BoxDecoration(
                                 color: const Color(0xFFE5E9EC),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.blueGrey.shade200),
+                                border: Border.all(
+                                  color: Colors.blueGrey.shade200,
+                                ),
                               ),
                               child: Stack(
                                 children: [
@@ -283,26 +458,57 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
                                       child: GestureDetector(
                                         onTap: () {
                                           final t = _tasks[i];
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('${t['title']}: ${t['customer_name']} (Due: ₹${t['collected'] ?? 5200})')),
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                '${t['title']}: ${t['customer_name'] ?? "No customer"} · Due date: ${t['due_date'] ?? "Not set"}',
+                                              ),
+                                            ),
                                           );
                                         },
                                         child: Column(
                                           children: [
                                             CircleAvatar(
                                               radius: 14,
-                                              backgroundColor: _tasks[i]['status'] == 'done' ? AppTheme.success : AppTheme.tealPrimary,
+                                              backgroundColor:
+                                                  _tasks[i]['status'] == 'done'
+                                                  ? AppTheme.success
+                                                  : AppTheme.tealPrimary,
                                               child: Text(
                                                 '${i + 1}',
-                                                style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(3), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)]),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(3),
+                                                boxShadow: const [
+                                                  BoxShadow(
+                                                    color: Colors.black12,
+                                                    blurRadius: 2,
+                                                  ),
+                                                ],
+                                              ),
                                               child: Text(
-                                                _tasks[i]['customer_name'] ?? 'Task',
-                                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+                                                _tasks[i]['customer_name'] ??
+                                                    'Task',
+                                                style: const TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
                                           ],
@@ -316,18 +522,37 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
                                     bottom: 16,
                                     left: 16,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.white,
                                         borderRadius: BorderRadius.circular(20),
-                                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            blurRadius: 4,
+                                          ),
+                                        ],
                                       ),
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.my_location, color: AppTheme.tealPrimary, size: 16),
+                                          Icon(
+                                            Icons.my_location,
+                                            color: AppTheme.tealPrimary,
+                                            size: 16,
+                                          ),
                                           SizedBox(width: 6),
-                                          Text('Live Agent GPS: Active', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.navyDark)),
+                                          Text(
+                                            'Live Agent GPS: Active',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppTheme.navyDark,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -336,7 +561,13 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
                               ),
                             ),
                             const SizedBox(height: 16),
-                            const Text('Field Centers & Route Sequence', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            const Text(
+                              'Field Centers & Route Sequence',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
                             const SizedBox(height: 8),
                             ..._tasks.map((t) {
                               final isDone = t['status'] == 'done';
@@ -346,26 +577,58 @@ class _FieldTasksScreenState extends State<FieldTasksScreen> with SingleTickerPr
                                   padding: const EdgeInsets.all(12),
                                   child: Row(
                                     children: [
-                                      Icon(Icons.pin_drop, color: isDone ? AppTheme.success : AppTheme.tealPrimary, size: 20),
+                                      Icon(
+                                        Icons.pin_drop,
+                                        color: isDone
+                                            ? AppTheme.success
+                                            : AppTheme.tealPrimary,
+                                        size: 20,
+                                      ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            Text(t['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                            Text('Lat: ${t['lat']} • Lng: ${t['lng']}', style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                                            Text(
+                                              t['title'] ?? '',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Lat: ${t['lat']} • Lng: ${t['lng']}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: AppTheme.textSecondary,
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
                                         decoration: BoxDecoration(
-                                          color: isDone ? AppTheme.successLight : Colors.amber.shade50,
-                                          borderRadius: BorderRadius.circular(4),
+                                          color: isDone
+                                              ? AppTheme.successLight
+                                              : Colors.amber.shade50,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         child: Text(
                                           isDone ? 'VISITED' : 'PENDING VISIT',
-                                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: isDone ? AppTheme.success : Colors.amber.shade900),
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDone
+                                                ? AppTheme.success
+                                                : Colors.amber.shade900,
+                                          ),
                                         ),
                                       ),
                                     ],

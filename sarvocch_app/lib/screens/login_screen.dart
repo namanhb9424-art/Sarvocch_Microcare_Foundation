@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -11,25 +12,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameCtrl = TextEditingController(text: 'admin');
-  final _passwordCtrl = TextEditingController(text: 'admin123');
+  final _usernameCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
   bool _obscurePassword = true;
   String? _errorMessage;
-
-  final List<Map<String, String>> _demoAccounts = [
-    {'label': 'Admin (Aarav)', 'user': 'admin', 'pw': 'admin123', 'role': 'Admin'},
-    {'label': 'Manager (Meera)', 'user': 'manager1', 'pw': 'manager123', 'role': 'Manager'},
-    {'label': 'Underwriter (Uday)', 'user': 'uw1', 'pw': 'uw123', 'role': 'Credit'},
-    {'label': 'Field PSO (Ravi)', 'user': 'agent1', 'pw': 'agent123', 'role': 'Field'},
-    {'label': 'Customer (Sunita)', 'user': 'cust1', 'pw': 'cust123', 'role': 'Borrower'},
-  ];
 
   Future<void> _handleLogin() async {
     setState(() => _errorMessage = null);
     final auth = context.read<AuthProvider>();
-    final success = await auth.login(_usernameCtrl.text.trim(), _passwordCtrl.text.trim());
+    final username = _usernameCtrl.text;
+    final password = _passwordCtrl.text;
+    final success = await auth.login(username, password);
 
     if (!mounted) return;
+    _passwordCtrl.clear();
 
     if (success) {
       if (auth.currentUser?.role == 'customer') {
@@ -39,15 +35,17 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       setState(() {
-        _errorMessage = 'Invalid username or password. Please use demo credentials.';
+        _errorMessage = 'Sign-in failed. Check your credentials or contact your administrator.';
       });
     }
   }
 
-  void _fillAndLogin(String user, String pw) {
-    _usernameCtrl.text = user;
-    _passwordCtrl.text = pw;
-    _handleLogin();
+  @override
+  void dispose() {
+    _usernameCtrl.dispose();
+    _passwordCtrl.clear();
+    _passwordCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -99,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'SARVOOCCH Microcare',
+                              'Sarvoocch Saathi',
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
@@ -107,7 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             Text(
-                              'Foundation • Micro Finance Portal',
+                              'SARVOOCCH Microcare Foundation • Microfinance',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
@@ -130,12 +128,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           const Text(
                             'Sign In to Portal',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           const Text(
-                            'Enter your credentials or choose a quick demo role below',
-                            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                            'Enter your account credentials to continue',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textSecondary,
+                            ),
                           ),
                           const SizedBox(height: 20),
 
@@ -146,16 +150,25 @@ class _LoginScreenState extends State<LoginScreen> {
                               decoration: BoxDecoration(
                                 color: AppTheme.dangerLight,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                                border: Border.all(
+                                  color: AppTheme.danger.withOpacity(0.3),
+                                ),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.error_outline, color: AppTheme.danger, size: 18),
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: AppTheme.danger,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       _errorMessage!,
-                                      style: const TextStyle(color: AppTheme.danger, fontSize: 12.5),
+                                      style: const TextStyle(
+                                        color: AppTheme.danger,
+                                        fontSize: 12.5,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -163,32 +176,51 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
 
                           // Username
-                          const Text('Username', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          const Text(
+                            'Username',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                           const SizedBox(height: 6),
                           TextField(
                             controller: _usernameCtrl,
                             decoration: const InputDecoration(
-                              hintText: 'e.g. admin, manager1, agent1',
+                              hintText: 'Enter username',
                               prefixIcon: Icon(Icons.person_outline, size: 20),
                             ),
                           ),
                           const SizedBox(height: 16),
 
                           // Password
-                          const Text('Password', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          const Text(
+                            'Password',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                           const SizedBox(height: 6),
                           TextField(
                             controller: _passwordCtrl,
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
                               hintText: 'Enter password',
-                              prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
                                 icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
                                   size: 20,
                                 ),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                             ),
                           ),
@@ -199,14 +231,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             width: double.infinity,
                             height: 46,
                             child: ElevatedButton(
-                              onPressed: auth.isLoading ? null : _handleLogin,
+                              onPressed:
+                                  auth.isLoading || auth.needsAccountRecovery
+                                  ? null
+                                  : _handleLogin,
                               child: auth.isLoading
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
                                     )
-                                  : const Text('Sign In', style: TextStyle(fontSize: 15)),
+                                  : const Text(
+                                      'Sign In',
+                                      style: TextStyle(fontSize: 15),
+                                    ),
                             ),
                           ),
                         ],
@@ -216,52 +257,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 20),
 
-                  // Quick Demo Accounts Chips
-                  Card(
-                    color: AppTheme.tealSurface.withOpacity(0.5),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.bolt, color: AppTheme.tealPrimary, size: 18),
-                              SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  'Instant 1-Click Demo Accounts',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.tealPrimary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _demoAccounts.map((acc) {
-                              return ActionChip(
-                                label: Text(acc['label']!),
-                                backgroundColor: Colors.white,
-                                side: const BorderSide(color: AppTheme.tealPrimary, width: 0.8),
-                                labelStyle: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.tealPrimary,
-                                ),
-                                onPressed: () => _fillAndLogin(acc['user']!, acc['pw']!),
-                              );
-                            }).toList(),
-                          ),
-                        ],
+                  if (auth.needsAccountRecovery)
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'No active administrator is available. Contact your organization support team to restore access.',
+                          style: TextStyle(color: AppTheme.danger),
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

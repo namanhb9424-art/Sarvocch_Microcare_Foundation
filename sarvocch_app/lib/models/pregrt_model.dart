@@ -1,3 +1,5 @@
+import '../services/currency_amount.dart';
+
 class PreGrtMemberModel {
   final int id;
   final int pregrtId;
@@ -6,7 +8,7 @@ class PreGrtMemberModel {
   final String name;
   final String husbandName;
   final int age;
-  final String voterId;
+  final String voterIdLast4;
   final String aadhaar4;
   final String familyInGroup;
   final String houseType;
@@ -35,57 +37,76 @@ class PreGrtMemberModel {
     required this.name,
     required this.husbandName,
     required this.age,
-    required this.voterId,
+    required this.voterIdLast4,
     this.aadhaar4 = '',
     this.familyInGroup = 'no',
-    this.houseType = 'pucca',
+    this.houseType = '',
     this.landHa = 0.0,
     this.livestock = '',
-    this.annualIncome = 180000.0,
-    this.familySize = 4,
-    this.category = 'OBC',
+    this.annualIncome = 0.0,
+    this.familySize = 0,
+    this.category = '',
     required this.loanAmount,
     required this.purpose,
     this.frequency = 'monthly',
-    this.instalments = 12,
-    this.cMeeting = 1,
-    this.cJoint = 1,
-    this.cFee = 1,
-    this.cRate = 1,
-    this.cInsurance = 1,
-    this.cCompany = 1,
-    this.cGroup = 1,
+    this.instalments = 0,
+    this.cMeeting = 0,
+    this.cJoint = 0,
+    this.cFee = 0,
+    this.cRate = 0,
+    this.cInsurance = 0,
+    this.cCompany = 0,
+    this.cGroup = 0,
   });
 
   factory PreGrtMemberModel.fromMap(Map<String, dynamic> map) {
     return PreGrtMemberModel(
       id: map['id'] as int,
       pregrtId: map['pregrt_id'] as int,
-      sno: (map['sno'] as int?) ?? 1,
+      sno: (map['sno'] as int?) ?? 0,
       customerId: map['customer_id'] as int?,
       name: map['name'] as String,
       husbandName: (map['husband_name'] ?? '') as String,
-      age: (map['age'] as int?) ?? 30,
-      voterId: (map['voter_id'] ?? '') as String,
+      age: (map['age'] as int?) ?? 0,
+      voterIdLast4: _lastFour(map['voter_id']?.toString() ?? ''),
       aadhaar4: (map['aadhaar4'] ?? '') as String,
       familyInGroup: (map['family_in_group'] ?? 'no') as String,
-      houseType: (map['house_type'] ?? 'pucca') as String,
+      houseType: (map['house_type'] ?? '') as String,
       landHa: (map['land_ha'] as num?)?.toDouble() ?? 0.0,
       livestock: (map['livestock'] ?? '') as String,
-      annualIncome: (map['annual_income'] as num?)?.toDouble() ?? 180000.0,
-      familySize: (map['family_size'] as int?) ?? 4,
-      category: (map['category'] ?? 'OBC') as String,
-      loanAmount: (map['loan_amount'] as num?)?.toDouble() ?? 20000.0,
+      annualIncome: map['annual_income_paise'] is num
+          ? CurrencyAmount.readStoredValue(
+              map,
+              'annual_income_paise',
+              'annual_income',
+            )
+          : (map['annual_income'] as num?)?.toDouble() ?? 0.0,
+      familySize: (map['family_size'] as int?) ?? 0,
+      category: (map['category'] ?? '') as String,
+      loanAmount: map['loan_amount_paise'] is num
+          ? CurrencyAmount.readStoredValue(
+              map,
+              'loan_amount_paise',
+              'loan_amount',
+            )
+          : (map['loan_amount'] as num?)?.toDouble() ?? 0.0,
       purpose: (map['purpose'] ?? '') as String,
-      frequency: (map['frequency'] ?? 'monthly') as String,
-      instalments: (map['instalments'] as int?) ?? 12,
-      cMeeting: (map['c_meeting'] as int?) ?? 1,
-      cJoint: (map['c_joint'] as int?) ?? 1,
-      cFee: (map['c_fee'] as int?) ?? 1,
-      cRate: (map['c_rate'] as int?) ?? 1,
-      cInsurance: (map['c_insurance'] as int?) ?? 1,
-      cCompany: (map['c_company'] as int?) ?? 1,
-      cGroup: (map['c_group'] as int?) ?? 1,
+      frequency: (map['frequency'] ?? '') as String,
+      instalments: (map['instalments'] as int?) ?? 0,
+      cMeeting: (map['c_meeting'] as int?) ?? 0,
+      cJoint: (map['c_joint'] as int?) ?? 0,
+      cFee: (map['c_fee'] as int?) ?? 0,
+      cRate: (map['c_rate'] as int?) ?? 0,
+      cInsurance: (map['c_insurance'] as int?) ?? 0,
+      cCompany: (map['c_company'] as int?) ?? 0,
+      cGroup: (map['c_group'] as int?) ?? 0,
+    );
+  }
+
+  static String _lastFour(String value) {
+    final normalized = value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    return normalized.substring(
+      normalized.length > 4 ? normalized.length - 4 : 0,
     );
   }
 
@@ -144,7 +165,10 @@ class PreGrtModel {
     this.members = const [],
   });
 
-  factory PreGrtModel.fromMap(Map<String, dynamic> map, {List<PreGrtMemberModel> members = const []}) {
+  factory PreGrtModel.fromMap(
+    Map<String, dynamic> map, {
+    List<PreGrtMemberModel> members = const [],
+  }) {
     return PreGrtModel(
       id: map['id'] as int,
       branch: (map['branch'] ?? '') as String,
@@ -159,7 +183,7 @@ class PreGrtModel {
       bmEmpid: (map['bm_empid'] ?? '') as String,
       leaderKnowsDuties: (map['leader_knows_duties'] ?? 'yes') as String,
       notes: (map['notes'] ?? '') as String,
-      agentId: (map['agent_id'] as int?) ?? 1,
+      agentId: (map['agent_id'] as int?) ?? 0,
       status: (map['status'] ?? 'draft') as String,
       createdAt: (map['created_at'] ?? '') as String,
       verifiedBy: map['verified_by'] as String?,

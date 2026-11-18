@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -16,441 +17,218 @@ class PdfService {
     await Printing.sharePdf(bytes: bytes, filename: '$title.pdf');
   }
 
-  /// Generate official Loan Sanction Letter PDF
-  static Future<Uint8List> generateSanctionLetter({
-    required String loanId,
-    required String customerName,
-    required String customerId,
-    required String phone,
-    required String branch,
-    required double amount,
-    required double rate,
-    required int tenure,
-    required double emi,
-    required String purpose,
-    required String sanctionDate,
-    String? coBorrower,
-  }) async {
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(36),
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // Header
-              pw.Center(
-                child: pw.Column(
-                  children: [
-                    pw.Text(
-                      'SARVOOCCH MICROCARE FOUNDATION',
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900),
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      '(CIN: U65999MP2023NPL000000 · Section 8 Microfinance Institution)',
-                      style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-                    ),
-                    pw.Text(
-                      'Regd. Office: Gorakhpur / Indore · Helpline: +91 98765 43210 · support@sarvoocch.org',
-                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                    ),
-                    pw.SizedBox(height: 8),
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.teal50,
-                        border: pw.Border.all(color: PdfColors.teal700, width: 0.5),
-                        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-                      ),
-                      child: pw.Text(
-                        'LOAN SANCTION LETTER (RIN SWIKRITI PATRA)',
-                        style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 16),
-              pw.Divider(thickness: 1, color: PdfColors.teal800),
-              pw.SizedBox(height: 10),
-
-              // Reference details
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Ref: SMF/SANCTION/$loanId', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Date: $sanctionDate', style: const pw.TextStyle(fontSize: 10)),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-
-              // Salutation
-              pw.Text('To,', style: const pw.TextStyle(fontSize: 10)),
-              pw.Text('Ms. / Mrs. $customerName (Customer ID: $customerId)', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-              pw.Text('Mobile: +91 $phone', style: const pw.TextStyle(fontSize: 9)),
-              pw.Text('Operating Branch: $branch', style: const pw.TextStyle(fontSize: 9)),
-              if (coBorrower != null && coBorrower.isNotEmpty)
-                pw.Text('Co-Borrower / Guarantor: $coBorrower', style: const pw.TextStyle(fontSize: 9)),
-              pw.SizedBox(height: 12),
-
-              pw.Text(
-                'Dear Madam,\nWe are pleased to inform you that your application for micro-credit financial assistance has been approved by the Credit Committee under Joint Liability Group (JLG) scheme as per details given below:',
-                style: const pw.TextStyle(fontSize: 9.5, lineSpacing: 2),
-              ),
-              pw.SizedBox(height: 12),
-
-              // Sanction Table
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-                children: [
-                  _pdfTableRow('Sanctioned Loan Account No', 'LN-$loanId', isHeader: false),
-                  _pdfTableRow('Principal Loan Amount', 'Rs. ${amount.toStringAsFixed(0)} /-', isHeader: false),
-                  _pdfTableRow('Loan Purpose', purpose, isHeader: false),
-                  _pdfTableRow('Rate of Interest (p.a.)', '$rate% per annum (Reducing Balance)', isHeader: false),
-                  _pdfTableRow('Repayment Tenure', '$tenure Equated Monthly Installments (EMIs)', isHeader: false),
-                  _pdfTableRow('Monthly Installment (EMI)', 'Rs. ${emi.toStringAsFixed(0)} /- per month', isHeader: false),
-                  _pdfTableRow('Processing Fee (1.5% + GST)', 'Rs. ${(amount * 0.015).toStringAsFixed(0)} /-', isHeader: false),
-                  _pdfTableRow('Credit Life Insurance Premium', 'Included as per opted scheme', isHeader: false),
-                ],
-              ),
-              pw.SizedBox(height: 14),
-
-              // Terms & Conditions
-              pw.Text('Key Terms & Regulatory Disclosures (RBI MFI Master Direction 2022):', style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 4),
-              pw.Bullet(text: 'No pre-payment penalty shall be levied for early repayment of this microfinance loan.', style: const pw.TextStyle(fontSize: 8.5)),
-              pw.Bullet(text: 'Repayments must be remitted strictly during designated Centre Meetings or through official digital modes.', style: const pw.TextStyle(fontSize: 8.5)),
-              pw.Bullet(text: 'Credit performance and repayment track record are reported monthly to Credit Information Bureaus (CIBIL/Equifax/CRIF).', style: const pw.TextStyle(fontSize: 8.5)),
-              pw.Bullet(text: 'Grievance Redressal: Call toll-free 1800-SARVOOCCH or email grievance@sarvoocch.org.', style: const pw.TextStyle(fontSize: 8.5)),
-
-              pw.Spacer(),
-
-              // Signatures
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Container(width: 140, height: 1, color: PdfColors.grey600),
-                      pw.SizedBox(height: 4),
-                      pw.Text('Signature / Thumb of Borrower', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('(I accept all terms & conditions)', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Container(width: 140, height: 1, color: PdfColors.grey600),
-                      pw.SizedBox(height: 4),
-                      pw.Text('For SARVOOCCH Microcare', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Authorized Branch Officer', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-            ],
-          );
-        },
-      ),
-    );
-
-    return pdf.save();
-  }
-
   /// Generate Loan Passbook Card PDF
   static Future<Uint8List> generatePassbookCard({
     required Map<String, dynamic> data,
   }) async {
+    final rawSchedule = data['schedule'];
+    if (rawSchedule is! List || rawSchedule.isEmpty) {
+      throw ArgumentError('A saved installment schedule is required.');
+    }
+    final schedule = rawSchedule.whereType<Map>().toList(growable: false);
     final pdf = pw.Document();
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+        build: (context) => [
+          pw.Center(
+            child: pw.Column(
+              children: [
+                pw.Text(
+                  'SARVOOCCH MICROCARE',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.teal900,
+                  ),
+                ),
+                pw.Text(
+                  'LOCAL LOAN SCHEDULE SUMMARY',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.Text(
+                  'Record preview only · Not an official statement or receipt',
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Divider(thickness: 1, color: PdfColors.teal900),
+          pw.SizedBox(height: 10),
+          pw.Text('Borrower: ${_pdfValue(data['customer_name'])}'),
+          pw.Text('Loan account: ${_pdfValue(data['id'])}'),
+          pw.Text('Branch: ${_pdfValue(data['branch'])}'),
+          pw.Text('Product: ${_pdfValue(data['product_name'])}'),
+          pw.Text('Principal: Rs. ${_pdfMoney(data['principal'])}'),
+          pw.Text(
+            'Rate: ${_pdfValue(data['rate'])}% p.a. (${_pdfValue(data['method'])})',
+          ),
+          pw.Text(
+            'Installment: Rs. ${_pdfMoney(data['emi'])} · Tenure: ${_pdfValue(data['tenure'])}',
+          ),
+          pw.Text('Start date: ${_pdfValue(data['start_date'])}'),
+          pw.SizedBox(height: 14),
+          pw.Text(
+            'SCHEDULE AND PAYMENT STATUS',
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(28),
+              1: const pw.FlexColumnWidth(1.2),
+              2: const pw.FlexColumnWidth(1),
+              3: const pw.FlexColumnWidth(1),
+              4: const pw.FlexColumnWidth(1),
+            },
             children: [
-              // Header
-              pw.Center(
-                child: pw.Column(
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  _tableCell('#', isHeader: true),
+                  _tableCell('Due date', isHeader: true),
+                  _tableCell('Due (Rs.)', isHeader: true),
+                  _tableCell('Paid on', isHeader: true),
+                  _tableCell('Paid (Rs.)', isHeader: true),
+                ],
+              ),
+              for (final row in schedule)
+                pw.TableRow(
                   children: [
-                    pw.Text('SARVOOCCH MICROCARE FOUNDATION', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
-                    pw.Text('MEMBER LOAN PASSBOOK (RIN PASSBOOK)', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Branch: ${data['branch'] ?? 'Indore - Vijay Nagar'}', style: const pw.TextStyle(fontSize: 9)),
+                    _tableCell(_pdfValue(row['no'])),
+                    _tableCell(_pdfValue(row['due_date'])),
+                    _tableCell(_pdfMoney(row['emi'])),
+                    _tableCell(_pdfValue(row['paid_on'])),
+                    _tableCell(
+                      (row['paid'] == 1 || row['paid'] == true)
+                          ? _pdfMoney(row['emi'])
+                          : '—',
+                    ),
                   ],
                 ),
-              ),
-              pw.SizedBox(height: 12),
-              pw.Divider(thickness: 1, color: PdfColors.teal900),
-              pw.SizedBox(height: 10),
-
-              // Borrower & Loan Summary
-              pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Borrower: ${data['customer_name'] ?? data['name'] ?? 'Sunita Verma'}', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Loan A/C: LN-${data['id'] ?? '001'}', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text('Center No: ${data['center_no'] ?? 'C-101'} - Group: ${data['group_no'] ?? 'G-A'}', style: const pw.TextStyle(fontSize: 9)),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('Sanctioned: Rs. ${data['principal'] ?? data['amount'] ?? 40000}', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Rate: ${data['rate'] ?? 18}% p.a. - Tenure: ${data['tenure'] ?? 12} Mos', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text('Monthly EMI: Rs. ${data['emi'] ?? 3667}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.teal800)),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 14),
-
-              // Installment Schedule Header
-              pw.Text('REPAYMENT LEDGER (KIST BHUGTAN BYORA)', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 6),
-
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-                children: [
-                  pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                    children: [
-                      _tableCell('#', isHeader: true),
-                      _tableCell('Due Date', isHeader: true),
-                      _tableCell('EMI (Rs.)', isHeader: true),
-                      _tableCell('Paid Date', isHeader: true),
-                      _tableCell('Amount Paid', isHeader: true),
-                      _tableCell('Officer Sign', isHeader: true),
-                    ],
-                  ),
-                  for (int i = 1; i <= 12; i++)
-                    pw.TableRow(
-                      decoration: pw.BoxDecoration(color: i <= 3 ? PdfColors.teal50 : null),
-                      children: [
-                        _tableCell('$i'),
-                        _tableCell('2026-${(i + 4).toString().padLeft(2, '0')}-10'),
-                        _tableCell('${data['emi'] ?? 3667}'),
-                        _tableCell(i <= 3 ? '2026-${(i + 4).toString().padLeft(2, '0')}-09' : '-'),
-                        _tableCell(i <= 3 ? '${data['emi'] ?? 3667}' : '-'),
-                        _tableCell(i <= 3 ? 'VERIFIED' : ''),
-                      ],
-                    ),
-                ],
-              ),
-
-              pw.Spacer(),
-              pw.Center(
-                child: pw.Text(
-                  'Keep this passbook card safe. Always insist on an instant SMS/receipt for every installment payment.',
-                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-                ),
-              ),
             ],
-          );
-        },
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            'Payment status shown from the local device record. Confirm it against the organization’s ledger before relying on this copy.',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+          ),
+        ],
       ),
     );
 
     return pdf.save();
   }
 
-  /// Generate Pre-GRT Certificate PDF
-  static Future<Uint8List> generatePreGrtCertificate({
+  /// Create a printable copy from one immutable local payment row.
+  /// It is explicitly identified as a device record, not an official receipt.
+  static Future<Uint8List> generateCollectionRecord({
     required Map<String, dynamic> data,
   }) async {
     final pdf = pw.Document();
-
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(36),
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Center(
-                child: pw.Column(
-                  children: [
-                    pw.Text('SARVOOCCH MICROCARE FOUNDATION', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
-                    pw.SizedBox(height: 4),
-                    pw.Text('PRE-GRT APPRAISAL & COMPLIANCE CERTIFICATE', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('(Poorv-GRT Mulyankan evam Anupalan Pramanpatra)', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 14),
-              pw.Divider(thickness: 1, color: PdfColors.teal800),
-              pw.SizedBox(height: 10),
-
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+        margin: const pw.EdgeInsets.all(42),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Center(
+              child: pw.Column(
                 children: [
-                  _pdfTableRow('Center & Group Code', 'Center ${data['center_no']} - Group ${data['group_no']}'),
-                  _pdfTableRow('Village / Town & District', '${data['village']}, ${data['district']}'),
-                  _pdfTableRow('Branch Office', data['branch'] ?? 'Indore - Vijay Nagar'),
-                  _pdfTableRow('Primary S.O. / Field Officer', '${data['pso_name']} (${data['pso_empid']})'),
-                  _pdfTableRow('7 CGT Discipline Points Verified', 'COMPLIANT & PASSED'),
-                  _pdfTableRow('Continuous Attendance Check', '100% Present in 3-day CGT'),
-                  _pdfTableRow('Joint Liability Understanding', 'VERIFIED & RECORDED'),
-                  _pdfTableRow('Certification Approved By', '${data['verified_by'] ?? "Meera Manager"} (Branch Manager)'),
-                  _pdfTableRow('Certification Date', data['verified_on'] ?? '2026-09-02'),
-                ],
-              ),
-              pw.SizedBox(height: 20),
-              pw.Text(
-                'This is to certify that all members of the aforementioned Group have undergone compulsory continuous group training (CGT) and understand the mutual cross-guarantee obligations under Sarvoocch Microcare JLG rules.',
-                style: const pw.TextStyle(fontSize: 9, lineSpacing: 2),
-              ),
-              pw.Spacer(),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Container(width: 140, height: 1, color: PdfColors.grey600),
-                      pw.SizedBox(height: 4),
-                      pw.Text('Field Officer (S.O.) Signature', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    ],
+                  pw.Text(
+                    'SARVOOCCH MICROCARE',
+                    style: pw.TextStyle(
+                      fontSize: 17,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.teal900,
+                    ),
                   ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Container(width: 140, height: 1, color: PdfColors.grey600),
-                      pw.SizedBox(height: 4),
-                      pw.Text('Branch Manager Seal & Signature', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    ],
+                  pw.SizedBox(height: 5),
+                  pw.Text(
+                    'LOCAL COLLECTION RECORD',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'Device copy · Confirm against the organization ledger',
+                    style: const pw.TextStyle(
+                      fontSize: 9,
+                      color: PdfColors.grey700,
+                    ),
                   ),
                 ],
               ),
-            ],
-          );
-        },
-      ),
-    );
-
-    return pdf.save();
-  }
-
-  /// Generate No Objection Certificate (NOC) PDF
-  static Future<Uint8List> generateNocCertificate({
-    required String loanId,
-    required String customerName,
-    required String customerId,
-    required String branch,
-    required String closureDate,
-  }) async {
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(36),
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Center(
-                child: pw.Column(
-                  children: [
-                    pw.Text('SARVOOCCH MICROCARE FOUNDATION', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
-                    pw.SizedBox(height: 4),
-                    pw.Text('NO OBJECTION & LOAN CLOSURE CERTIFICATE', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('(Rin Bebaki evam Anapatti Pramanpatra)', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
-                  ],
-                ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Divider(color: PdfColors.teal900),
+            pw.SizedBox(height: 14),
+            _receiptRow('Reference', _pdfValue(data['reference'])),
+            _receiptRow('Recorded at', _pdfValue(data['recorded_at'])),
+            _receiptRow('Borrower', _pdfValue(data['customer_name'])),
+            _receiptRow('Loan account', _pdfValue(data['loan_id'])),
+            _receiptRow('Branch', _pdfValue(data['branch'])),
+            _receiptRow('Product', _pdfValue(data['product_name'])),
+            _receiptRow('Installment', _pdfValue(data['installment'])),
+            _receiptRow('Payment mode', _pdfValue(data['channel'])),
+            pw.SizedBox(height: 12),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(14),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.teal700),
+                borderRadius: pw.BorderRadius.circular(5),
               ),
-              pw.SizedBox(height: 14),
-              pw.Divider(thickness: 1, color: PdfColors.teal800),
-              pw.SizedBox(height: 16),
-
-              pw.Row(
+              child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Ref: SMF/NOC/$loanId', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Closure Date: $closureDate', style: const pw.TextStyle(fontSize: 10)),
+                  pw.Text(
+                    'Amount recorded',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(
+                    'Rs. ${_pdfMoney(data['amount'])}',
+                    style: pw.TextStyle(
+                      fontSize: 17,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.teal900,
+                    ),
+                  ),
                 ],
               ),
-              pw.SizedBox(height: 16),
-
-              pw.Text('TO WHOMSOEVER IT MAY CONCERN', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 10),
-
-              pw.Text(
-                'This is to certify that Ms. / Mrs. $customerName (Customer ID: $customerId), residing at $branch operating jurisdiction, had availed a microfinance credit facility under Loan Account Number LN-$loanId from SARVOOCCH Microcare Foundation.\n\n'
-                'We hereby confirm that the aforesaid loan has been FULLY REPAID together with all applicable interest and dues. As on $closureDate, there is ZERO OUTSTANDING balance against this loan account.\n\n'
-                'SARVOOCCH Microcare Foundation has NO OBJECTION to the borrower availing credit facilities from any other Bank, NBFC or MFI. The borrower bears a satisfactory repayment track record.',
-                style: const pw.TextStyle(fontSize: 10, lineSpacing: 2),
-              ),
-              pw.SizedBox(height: 24),
-
-              pw.Text('Loan Account Details for Reference:', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 6),
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-                children: [
-                  _pdfTableRow('Loan Account No', 'LN-$loanId'),
-                  _pdfTableRow('Borrower Name', customerName),
-                  _pdfTableRow('Customer CIF', customerId),
-                  _pdfTableRow('Account Status', 'CLOSED (Zero Outstanding)'),
-                  _pdfTableRow('Issuing Branch', branch),
-                ],
-              ),
-
-              pw.Spacer(),
-              pw.Align(
-                alignment: pw.Alignment.centerRight,
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Container(width: 160, height: 1, color: PdfColors.grey600),
-                    pw.SizedBox(height: 4),
-                    pw.Text('For SARVOOCCH Microcare Foundation', style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Authorized Officer / Branch Manager', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
-                    pw.Text('Official Seal & Signature', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 16),
-            ],
-          );
-        },
+            ),
+            pw.SizedBox(height: 22),
+            pw.Text(
+              'This copy was generated from the payment record stored on this device. It does not confirm bank settlement or replace the organization’s official receipt and ledger reconciliation.',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+            ),
+          ],
+        ),
       ),
     );
-
     return pdf.save();
   }
 
-  static pw.TableRow _pdfTableRow(String label, String value, {bool isHeader = false}) {
-    return pw.TableRow(
-      children: [
-        pw.Padding(
-          padding: const pw.EdgeInsets.all(6),
-          child: pw.Text(
-            label,
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
-          ),
-        ),
-        pw.Padding(
-          padding: const pw.EdgeInsets.all(6),
-          child: pw.Text(
-            value,
-            style: pw.TextStyle(fontSize: 9, fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal),
-          ),
-        ),
-      ],
-    );
+  static String _pdfValue(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? 'Not recorded' : text;
+  }
+
+  static String _pdfMoney(dynamic value) {
+    if (value is! num) return 'Not recorded';
+    return value.toStringAsFixed(2);
   }
 
   static pw.Widget _tableCell(String text, {bool isHeader = false}) {
@@ -466,4 +244,23 @@ class PdfService {
       ),
     );
   }
+
+  static pw.Widget _receiptRow(String label, String value) => pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 6),
+    child: pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(
+          width: 112,
+          child: pw.Text(label, style: const pw.TextStyle(fontSize: 10)),
+        ),
+        pw.Expanded(
+          child: pw.Text(
+            value,
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+      ],
+    ),
+  );
 }

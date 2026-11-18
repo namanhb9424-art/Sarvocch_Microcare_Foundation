@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+
+import '../../models/customer_model.dart';
+import '../../models/user_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/customer_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
@@ -14,22 +19,20 @@ class KycVerifyScreen extends StatefulWidget {
 
 class _KycVerifyScreenState extends State<KycVerifyScreen> {
   int? _selectedCustomerId;
-  final _aadhaarCtrl = TextEditingController(text: '234567890123');
-  final _panCtrl = TextEditingController(text: 'ABCPE1234F');
-  final _voterCtrl = TextEditingController(text: 'MP0123405');
-  final _otpCtrl = TextEditingController(text: '123456');
+  final _aadhaarCtrl = TextEditingController();
+  final _panCtrl = TextEditingController();
+  final _voterCtrl = TextEditingController();
+  final _otpCtrl = TextEditingController();
+  final _reviewRemarksCtrl = TextEditingController();
 
-  bool _isAadhaarValid = true;
-  bool _isPanValid = true;
+  bool _isAadhaarValid = false;
+  bool _isPanValid = false;
+  bool _originalDocumentsChecked = false;
   String? _verificationResult;
 
   @override
   void initState() {
     super.initState();
-    final customers = context.read<CustomerProvider>().customers;
-    if (customers.isNotEmpty) {
-      _selectedCustomerId = customers.first.id;
-    }
   }
 
   void _validateAadhaar(String val) {
@@ -46,57 +49,159 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _aadhaarCtrl.clear();
+    _panCtrl.clear();
+    _voterCtrl.clear();
+    _otpCtrl.clear();
+    _aadhaarCtrl.dispose();
+    _panCtrl.dispose();
+    _voterCtrl.dispose();
+    _otpCtrl.dispose();
+    _reviewRemarksCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _verifyDocs() async {
     if (_selectedCustomerId == null) return;
     if (!_isAadhaarValid || !_isPanValid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please correct invalid document formats')),
+        const SnackBar(
+          content: Text('Please correct invalid document formats'),
+        ),
       );
       return;
     }
 
-    final success = await context.read<CustomerProvider>().verifyKycDocuments(
-          customerId: _selectedCustomerId!,
-          aadhaar: _aadhaarCtrl.text.trim(),
-          pan: _panCtrl.text.trim(),
-          voter: _voterCtrl.text.trim(),
-        );
+    final customerId = _selectedCustomerId!;
+    final actorUserId = context.read<AuthProvider>().currentUser?.id ?? 0;
+    final aadhaar = _aadhaarCtrl.text.trim();
+    final pan = _panCtrl.text.trim();
+    final voter = _voterCtrl.text.trim();
+    bool success;
+    try {
+      success = await context.read<CustomerProvider>().verifyKycDocuments(
+        customerId: customerId,
+        actorUserId: actorUserId,
+        aadhaar: aadhaar,
+        pan: pan,
+        voter: voter,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _aadhaarCtrl.clear();
+          _panCtrl.clear();
+          _voterCtrl.clear();
+          _isAadhaarValid = false;
+          _isPanValid = false;
+        });
+      }
+    }
 
     if (!mounted) return;
 
     if (success) {
       setState(() {
-        _verificationResult = 'Identity Verified: NSDL & UIDAI Mock Handshake Passed 200 OK.';
+        _verificationResult = 'Document values were recorded for review. Issuer verification has not been performed; KYC remains pending.';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('KYC documents verified successfully!'), backgroundColor: AppTheme.success),
+        const SnackBar(
+          content: Text(
+            'Document values recorded. KYC remains pending review.',
+          ),
+          backgroundColor: AppTheme.success,
+        ),
       );
     }
   }
 
   Future<void> _verifyOtp() async {
+    if (!kDebugMode) {
+      _otpCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'OTP delivery is not configured. No verification was performed.',
+          ),
+        ),
+      );
+      return;
+    }
+    final otp = _otpCtrl.text.trim();
+    _otpCtrl.clear();
     if (_selectedCustomerId == null) return;
+    final actorUserId = context.read<AuthProvider>().currentUser?.id;
+    if (actorUserId == null) return;
     final success = await context.read<CustomerProvider>().verifyWhatsAppOtp(
-          _selectedCustomerId!,
-          _otpCtrl.text.trim(),
-        );
+      customerId: _selectedCustomerId!,
+      otp: otp,
+      actorUserId: actorUserId,
+    );
 
     if (!mounted) return;
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('WhatsApp OTP (123456) Verified!'), backgroundColor: AppTheme.success),
+        const SnackBar(
+          content: Text('Development OTP simulation passed.'),
+          backgroundColor: AppTheme.success,
+        ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid OTP. Use demo OTP: 123456'), backgroundColor: AppTheme.danger),
+        const SnackBar(
+          content: Text('The development OTP did not match.'),
+          backgroundColor: AppTheme.danger,
+        ),
       );
     }
   }
 
+  Future<void> _approveKyc() async {
+    final reviewerId = context.read<AuthProvider>().currentUser?.id;
+    if (_selectedCustomerId == null || reviewerId == null) return;
+
+    final success = await context.read<CustomerProvider>().approveKyc(
+      customerId: _selectedCustomerId!,
+      reviewerId: reviewerId,
+      remarks: _reviewRemarksCtrl.text,
+      originalDocumentsChecked: _originalDocumentsChecked,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _verificationResult = success
+          ? 'KYC approved after a separate manual review. No issuer database was queried.'
+          : 'KYC approval was not recorded. Check reviewer permissions, maker-checker, consent and field-visit status.';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? 'KYC manually approved.' : 'KYC approval failed.',
+        ),
+        backgroundColor: success ? AppTheme.success : AppTheme.danger,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final customers = context.watch<CustomerProvider>().customers;
+    final currentUser = context.watch<AuthProvider>().currentUser;
+    final customers = _visibleCustomers(
+      context.watch<CustomerProvider>().customers,
+      currentUser,
+    );
+    final canReviewKyc = {
+      'admin',
+      'manager',
+      'underwriter',
+    }.contains(currentUser?.role);
+    final selectedCustomer =
+        customers.any((customer) => customer.id == _selectedCustomerId)
+        ? customers.firstWhere((customer) => customer.id == _selectedCustomerId)
+        : null;
 
     return Scaffold(
       appBar: const CustomAppBar(title: 'KYC Document Verification'),
@@ -112,16 +217,28 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
               decoration: BoxDecoration(
                 color: AppTheme.tealSurface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.tealPrimary.withOpacity(0.3)),
+                border: Border.all(
+                  color: AppTheme.tealPrimary.withOpacity(0.3),
+                ),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.shield_outlined, color: AppTheme.tealPrimary, size: 24),
-                  SizedBox(width: 12),
+                  const Icon(
+                    Icons.shield_outlined,
+                    color: AppTheme.tealPrimary,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'UIDAI, NSDL PAN, & WhatsApp OTP Verification Simulation. Zero external paid APIs required.',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppTheme.tealDark),
+                      kDebugMode
+                          ? 'Development-only document and OTP simulations. No issuer or WhatsApp service is contacted.'
+                          : 'Local document formatting only. Issuer and WhatsApp verification services are not configured.',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.tealDark,
+                      ),
                     ),
                   ),
                 ],
@@ -137,18 +254,30 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('SELECT CUSTOMER TO VERIFY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary)),
+                    const Text(
+                      'SELECT CUSTOMER TO VERIFY',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<int>(
                       value: _selectedCustomerId,
-                      decoration: const InputDecoration(labelText: 'Customer *'),
+                      decoration: const InputDecoration(
+                        labelText: 'Customer *',
+                      ),
                       items: customers.map((c) {
                         return DropdownMenuItem(
                           value: c.id,
-                          child: Text('${c.name} (${c.phone}) - ${c.kycStatus.toUpperCase()}'),
+                          child: Text(
+                            '${c.name} (${c.phone}) - ${c.kycStatus.toUpperCase()}',
+                          ),
                         );
                       }).toList(),
-                      onChanged: (val) => setState(() => _selectedCustomerId = val),
+                      onChanged: (val) =>
+                          setState(() => _selectedCustomerId = val),
                     ),
                   ],
                 ),
@@ -164,22 +293,34 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('DOCUMENT NUMBERS & FORMAT CHECK', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary)),
+                    const Text(
+                      'DOCUMENT NUMBERS & FORMAT CHECK',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 14),
 
                     // Aadhaar
                     TextField(
                       controller: _aadhaarCtrl,
                       keyboardType: TextInputType.number,
+                      obscureText: true,
                       onChanged: _validateAadhaar,
                       decoration: InputDecoration(
                         labelText: 'Aadhaar Number (12 Digits) *',
                         prefixIcon: const Icon(Icons.fingerprint),
                         suffixIcon: Icon(
                           _isAadhaarValid ? Icons.check_circle : Icons.error,
-                          color: _isAadhaarValid ? AppTheme.success : AppTheme.danger,
+                          color: _isAadhaarValid
+                              ? AppTheme.success
+                              : AppTheme.danger,
                         ),
-                        errorText: _isAadhaarValid ? null : 'Aadhaar must be exactly 12 digits',
+                        errorText: _isAadhaarValid
+                            ? null
+                            : 'Aadhaar must be exactly 12 digits',
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -188,13 +329,16 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                     TextField(
                       controller: _panCtrl,
                       textCapitalization: TextCapitalization.characters,
+                      obscureText: true,
                       onChanged: _validatePan,
                       decoration: InputDecoration(
                         labelText: 'PAN Card (ABCPE1234F format) *',
                         prefixIcon: const Icon(Icons.credit_card),
                         suffixIcon: Icon(
                           _isPanValid ? Icons.check_circle : Icons.error,
-                          color: _isPanValid ? AppTheme.success : AppTheme.danger,
+                          color: _isPanValid
+                              ? AppTheme.success
+                              : AppTheme.danger,
                         ),
                         errorText: _isPanValid ? null : 'Invalid PAN format: 5 letters, 4 digits, 1 letter',
                       ),
@@ -204,6 +348,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                     // Voter ID
                     TextField(
                       controller: _voterCtrl,
+                      obscureText: true,
                       decoration: const InputDecoration(
                         labelText: 'Voter ID (EPIC Number)',
                         prefixIcon: Icon(Icons.badge_outlined),
@@ -216,7 +361,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                       height: 46,
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.verified, size: 18),
-                        label: const Text('Verify Identity Documents'),
+                        label: const Text('Record Documents for Manual Review'),
                         onPressed: _verifyDocs,
                       ),
                     ),
@@ -231,12 +376,20 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.check_circle, color: AppTheme.success, size: 18),
+                            const Icon(
+                              Icons.check_circle,
+                              color: AppTheme.success,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 _verificationResult!,
-                                style: const TextStyle(color: AppTheme.success, fontSize: 12, fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  color: AppTheme.success,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -250,6 +403,68 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
 
             const SizedBox(height: 16),
 
+            if (canReviewKyc && selectedCustomer?.kycStatus == 'pending') ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'SEPARATE KYC REVIEW',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Review the applicant’s original documents and field visit record in person. This approval is a staff attestation; no government issuer service is connected.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _originalDocumentsChecked,
+                        onChanged: (value) => setState(
+                          () => _originalDocumentsChecked = value ?? false,
+                        ),
+                        title: const Text(
+                          'I checked the original identity documents and consent record.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      TextField(
+                        controller: _reviewRemarksCtrl,
+                        maxLines: 3,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          labelText: 'Review notes *',
+                          hintText:
+                              'Record what was checked and any exceptions.',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed:
+                              _originalDocumentsChecked &&
+                                  _reviewRemarksCtrl.text.trim().length >= 10
+                              ? _approveKyc
+                              : null,
+                          icon: const Icon(Icons.fact_check_outlined),
+                          label: const Text('Approve KYC After Review'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // WhatsApp OTP Mock Verification Card
             Card(
               child: Padding(
@@ -257,11 +472,23 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('WHATSAPP MOBILE OTP VERIFICATION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary)),
-                    const SizedBox(height: 10),
                     const Text(
-                      'Sends an automated OTP to borrower WhatsApp for e-sign verification.',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      'WHATSAPP MOBILE OTP VERIFICATION',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      kDebugMode
+                          ? 'Development-only OTP simulation; no message is sent.'
+                          : 'No OTP provider is configured. This action is unavailable.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     Row(
@@ -271,14 +498,16 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                             controller: _otpCtrl,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                              labelText: 'Demo OTP (Enter 123456)',
+                              labelText: kDebugMode
+                                  ? 'Development OTP simulation'
+                                  : 'OTP provider unavailable',
                               prefixIcon: Icon(Icons.message_outlined),
                             ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton(
-                          onPressed: _verifyOtp,
+                          onPressed: kDebugMode ? _verifyOtp : null,
                           child: const Text('Verify OTP'),
                         ),
                       ],
@@ -291,5 +520,21 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
         ),
       ),
     );
+  }
+
+  List<CustomerModel> _visibleCustomers(
+    List<CustomerModel> customers,
+    UserModel? user,
+  ) {
+    if (user == null) return const [];
+    if (user.role == 'admin') return customers;
+    if (user.role == 'field_agent') {
+      return customers
+          .where((customer) => customer.agentId == user.id)
+          .toList();
+    }
+    return customers
+        .where((customer) => customer.branch == user.branch)
+        .toList();
   }
 }

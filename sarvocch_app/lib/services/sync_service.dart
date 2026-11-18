@@ -1,32 +1,22 @@
 import 'dart:convert';
-import 'package:connectivity_plus/connectivity_plus.dart';
+
 import 'package:flutter/foundation.dart';
+
 import '../data/database_helper.dart';
-import 'api_service.dart';
 
 class SyncService extends ChangeNotifier {
   static final SyncService _instance = SyncService._internal();
   factory SyncService() => _instance;
   SyncService._internal();
 
-  bool _isSyncing = false;
   int _pendingCount = 0;
   String _lastSyncStatus = 'Idle';
-  DateTime? _lastSyncTime;
 
-  bool get isSyncing => _isSyncing;
   int get pendingCount => _pendingCount;
   String get lastSyncStatus => _lastSyncStatus;
-  DateTime? get lastSyncTime => _lastSyncTime;
 
   Future<void> init() async {
     await updatePendingCount();
-    Connectivity().onConnectivityChanged.listen((result) {
-      final isOnline = result.any((r) => r != ConnectivityResult.none);
-      if (isOnline && _pendingCount > 0 && !_isSyncing) {
-        triggerFullSync();
-      }
-    });
   }
 
   Future<int> updatePendingCount() async {
@@ -44,98 +34,74 @@ class SyncService extends ChangeNotifier {
   }
 
   /// Add offline action to sync queue
-  Future<void> enqueueAction({
+  Future<bool> enqueueAction({
     required int userId,
     required String action,
     required Map<String, dynamic> payload,
+    required String operationId,
   }) async {
+    final normalizedAction = action.trim();
+    final normalizedOperationId = operationId.trim();
+    if (userId <= 0 ||
+        normalizedAction.isEmpty ||
+        normalizedOperationId.isEmpty ||
+        normalizedOperationId.length > 128) {
+      return false;
+    }
+
     try {
       final db = await DatabaseHelper.instance.database;
       final nowIso = DateTime.now().toIso8601String().substring(0, 19);
-      final uuid = 'SYNC-${DateTime.now().millisecondsSinceEpoch}-$userId';
-
-      final fullPayload = {
-        'action': action,
+      final encodedPayload = jsonEncode({
+        'action': normalizedAction,
         'data': payload,
-      };
+      });
+      final inserted = await db.transaction<bool>((txn) async {
+        final actors = await txn.query(
+          'users',
+          columns: ['id'],
+          where: "id = ? AND auth_status = 'active'",
+          whereArgs: [userId],
+          limit: 1,
+        );
+        if (actors.isEmpty) return false;
 
-      await db.insert('sync_log', {
-        'uuid': uuid,
-        'user_id': userId,
-        'payload': jsonEncode(fullPayload),
-        'captured_at': nowIso,
-        'synced_at': null,
+        final existing = await txn.query(
+          'sync_log',
+          columns: ['user_id', 'payload'],
+          where: 'uuid = ?',
+          whereArgs: [normalizedOperationId],
+          limit: 1,
+        );
+        if (existing.isNotEmpty) {
+          return existing.first['user_id'] == userId &&
+              existing.first['payload'] == encodedPayload;
+        }
+
+        await txn.insert('sync_log', {
+          'uuid': normalizedOperationId,
+          'user_id': userId,
+          'payload': encodedPayload,
+          'captured_at': nowIso,
+          'synced_at': null,
+        });
+        return true;
       });
 
       await updatePendingCount();
-    } catch (e) {
-      debugPrint('SyncService enqueue error: $e');
+      return inserted;
+    } catch (_) {
+      debugPrint('Offline operation could not be queued.');
+      return false;
     }
   }
 
-  /// Trigger full bidirectional sync with server
+  /// Report that sync is unavailable until a secure backend is configured.
   Future<bool> triggerFullSync({int? userId}) async {
-    if (_isSyncing) return false;
-    _isSyncing = true;
-    _lastSyncStatus = 'Synchronizing...';
+    _lastSyncStatus =
+        'Sync is not configured; pending changes remain on this device.';
+    await updatePendingCount();
     notifyListeners();
-
-    try {
-      final db = await DatabaseHelper.instance.database;
-
-      // 1. Fetch pending items from queue
-      final pendingRows = await db.query(
-        'sync_log',
-        where: "synced_at IS NULL OR synced_at = ''",
-        orderBy: 'id ASC',
-      );
-
-      if (pendingRows.isNotEmpty) {
-        final List<Map<String, dynamic>> queueItems = [];
-        for (var row in pendingRows) {
-          queueItems.add({
-            'uuid': row['uuid'],
-            'user_id': row['user_id'],
-            'payload': jsonDecode(row['payload'] as String),
-            'captured_at': row['captured_at'],
-          });
-        }
-
-        // Push to server
-        final pushed = await ApiService().pushOfflineQueue(queueItems);
-        if (pushed) {
-          final nowIso = DateTime.now().toIso8601String().substring(0, 19);
-          for (var row in pendingRows) {
-            await db.update(
-              'sync_log',
-              {'synced_at': nowIso},
-              where: 'id = ?',
-              whereArgs: [row['id']],
-            );
-          }
-        }
-      }
-
-      // 2. Pull latest bundle from server
-      final serverBundle = await ApiService().fetchSyncBundle();
-      if (serverBundle != null) {
-        // Server bundle received successfully
-        _lastSyncStatus = 'Up-to-date';
-      } else {
-        _lastSyncStatus = pendingRows.isEmpty ? 'Local queue clear (Server offline)' : 'Pending sync';
-      }
-
-      _lastSyncTime = DateTime.now();
-      await updatePendingCount();
-      return true;
-    } catch (e) {
-      debugPrint('SyncService error: $e');
-      _lastSyncStatus = 'Sync error: $e';
-      return false;
-    } finally {
-      _isSyncing = false;
-      notifyListeners();
-    }
+    return false;
   }
 }
-

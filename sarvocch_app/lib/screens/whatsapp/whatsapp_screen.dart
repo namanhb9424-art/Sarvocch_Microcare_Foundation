@@ -1,6 +1,9 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+
 import '../../data/database_helper.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
@@ -26,7 +29,28 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
 
   Future<void> _loadCustomers() async {
     final db = await DatabaseHelper.instance.database;
-    final results = await db.query('customers', orderBy: 'name ASC');
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final results = await db.rawQuery(
+      '''
+      SELECT c.*
+      FROM customers c
+      JOIN users actor ON actor.id = ?
+      WHERE actor.auth_status = 'active'
+        AND (
+          actor.role = 'admin'
+          OR (actor.role = 'manager'
+              AND trim(actor.branch) <> '' AND c.branch = actor.branch)
+          OR (actor.role = 'field_agent' AND c.agent_id = actor.id
+              AND trim(actor.branch) <> '' AND c.branch = actor.branch)
+        )
+      ORDER BY c.name ASC
+      ''',
+      [user.id],
+    );
     if (mounted) {
       setState(() {
         _customers = results;
@@ -35,12 +59,9 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
     }
   }
 
-  Future<void> _sendWhatsAppOtp(int customerId, String name, String phone) async {
+  Future<void> _sendWhatsAppOtp(String name, String phone) async {
+    if (!kDebugMode) return;
     final otp = '${Random().nextInt(900000) + 100000}';
-    final db = await DatabaseHelper.instance.database;
-    await db.update('customers', {'wa_otp': otp}, where: 'id = ?', whereArgs: [customerId]);
-    await _loadCustomers();
-
     if (!mounted) return;
 
     showDialog(
@@ -50,14 +71,19 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
           children: [
             const Icon(Icons.chat, color: Color(0xFF25D366)),
             const SizedBox(width: 8),
-            Text('WhatsApp OTP: $name', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              'WhatsApp OTP: $name',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Generated 6-digit OTP code for +91 $phone:'),
+            const Text(
+              'Development-only OTP value (no WhatsApp message was sent):',
+            ),
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
@@ -70,26 +96,39 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
               child: Center(
                 child: Text(
                   otp,
-                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 4, color: Color(0xFF075E54)),
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 4,
+                    color: Color(0xFF075E54),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 14),
             Text(
-              'Simulated WhatsApp text:\n"Hello $name, your SARVOOCCH Microcare verification code is $otp. Reply to confirm."',
-              style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+              'This simulation does not contact WhatsApp, verify the phone number, or change the customer record.',
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: AppTheme.textSecondary,
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+            ),
             icon: const Icon(Icons.check, size: 18),
-            label: const Text('Verify Now'),
+            label: const Text('Continue simulation'),
             onPressed: () {
               Navigator.pop(ctx);
-              _showVerifyDialog(customerId, otp);
+              _showVerifyDialog(otp);
             },
           ),
         ],
@@ -97,8 +136,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
     );
   }
 
-  void _showVerifyDialog(int customerId, String correctOtp) {
-    final otpCtrl = TextEditingController(text: correctOtp);
+  void _showVerifyDialog(String correctOtp) {
+    final otpCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -106,37 +145,35 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
         content: TextField(
           controller: otpCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Enter 6-digit WhatsApp OTP'),
+          decoration: const InputDecoration(
+            labelText: 'Enter 6-digit WhatsApp OTP',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               if (otpCtrl.text.trim() == correctOtp) {
-                final db = await DatabaseHelper.instance.database;
-                final nowIso = DateTime.now().toIso8601String().substring(0, 19);
-                final auth = context.read<AuthProvider>();
-
-                await db.update('customers', {'wa_verified': 1, 'wa_otp': null}, where: 'id = ?', whereArgs: [customerId]);
-                await db.insert('comm_logs', {
-                  'customer_id': customerId,
-                  'channel': 'whatsapp',
-                  'note': 'WhatsApp mobile number verified via OTP',
-                  'by_name': auth.currentUser?.name ?? 'Field Officer',
-                  'at': nowIso,
-                });
-
                 if (ctx.mounted) Navigator.pop(ctx);
-                await _loadCustomers();
-
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('WhatsApp number verified successfully!'), backgroundColor: AppTheme.success),
+                    const SnackBar(
+                      content: Text(
+                        'Development OTP simulation passed. No message was sent and the record was not changed.',
+                      ),
+                      backgroundColor: AppTheme.info,
+                    ),
                   );
                 }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invalid OTP code. Please re-check.'), backgroundColor: AppTheme.danger),
+                  const SnackBar(
+                    content: Text('Invalid OTP code. Please re-check.'),
+                    backgroundColor: AppTheme.danger,
+                  ),
                 );
               }
             },
@@ -160,47 +197,88 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
               itemBuilder: (ctx, i) {
                 final c = _customers[i];
                 final isVerified = (c['wa_verified'] as int? ?? 0) == 1;
-                final hasPendingOtp = c['wa_otp'] != null;
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 10),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     leading: CircleAvatar(
-                      backgroundColor: isVerified ? const Color(0xFFDCF8C6) : AppTheme.background,
+                      backgroundColor: isVerified
+                          ? const Color(0xFFDCF8C6)
+                          : AppTheme.background,
                       child: Icon(
                         Icons.chat,
-                        color: isVerified ? const Color(0xFF25D366) : AppTheme.textSecondary,
+                        color: isVerified
+                            ? const Color(0xFF25D366)
+                            : AppTheme.textSecondary,
                         size: 20,
                       ),
                     ),
-                    title: Text(c['name'] as String, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    title: Text(
+                      c['name'] as String,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 2),
-                        Text('Phone: +91 ${c['phone']} • ${c['branch']}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                        Text(
+                          'Phone: ${c['phone']} • ${c['branch']}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
-                          isVerified ? 'VERIFIED WHATSAPP NUMBER' : hasPendingOtp ? 'OTP Sent (Pending Verification)' : 'Not Verified',
+                          isVerified
+                              ? 'VERIFIED WHATSAPP NUMBER'
+                              : kDebugMode
+                              ? 'Development simulation only'
+                              : 'WhatsApp provider not configured',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: isVerified ? AppTheme.success : hasPendingOtp ? Colors.orange.shade800 : AppTheme.textMuted,
+                            color: isVerified
+                                ? AppTheme.success
+                                : kDebugMode
+                                ? Colors.orange.shade800
+                                : AppTheme.textMuted,
                           ),
                         ),
                       ],
                     ),
                     trailing: isVerified
-                        ? const Icon(Icons.verified, color: AppTheme.success, size: 22)
+                        ? const Icon(
+                            Icons.verified,
+                            color: AppTheme.success,
+                            size: 22,
+                          )
                         : ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF25D366),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                             ),
                             icon: const Icon(Icons.send, size: 14),
-                            label: const Text('Send OTP', style: TextStyle(fontSize: 12)),
-                            onPressed: () => _sendWhatsAppOtp(c['id'] as int, c['name'] as String, c['phone'] as String),
+                            label: Text(
+                              kDebugMode ? 'Simulate OTP' : 'Unavailable',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            onPressed: kDebugMode
+                                ? () => _sendWhatsAppOtp(
+                                    c['name'] as String,
+                                    c['phone'] as String,
+                                  )
+                                : null,
                           ),
                   ),
                 );
