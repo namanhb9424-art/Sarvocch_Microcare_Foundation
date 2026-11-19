@@ -40,7 +40,7 @@ class Database {
                 self::$instance->exec("PRAGMA foreign_keys=ON;");
                 self::$instance->exec("PRAGMA busy_timeout=5000;");
             } else {
-                throw new Exception("Database Connection Failed: " . $e->getMessage());
+                throw new Exception("Database Connection Failed: " . $e->getMessage() . " [Host: " . DB_HOST . ", Database: " . DB_NAME . ", User: " . DB_USER . "]");
             }
         }
 

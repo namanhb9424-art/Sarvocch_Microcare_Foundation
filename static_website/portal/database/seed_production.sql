@@ -4,8 +4,6 @@
 -- NO DEMO CUSTOMERS, NO DEMO LOANS, NO MOCKED PASSWORDS
 -- ========================================================================
 
-USE `sarvoocch_portal`;
-
 -- 1. Default Business Settings (RBI Compliance & MFI Policy)
 INSERT INTO `settings` (`key`, `value`) VALUES
   ('min_age', '18'),

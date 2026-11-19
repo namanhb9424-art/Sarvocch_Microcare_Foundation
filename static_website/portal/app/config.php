@@ -17,6 +17,33 @@ define('APP_PATH', BASE_PATH . '/app');
 define('STORAGE_PATH', BASE_PATH . '/storage');
 define('UPLOAD_DIR', STORAGE_PATH . '/uploads');
 
+// Load environment variables from .env if present
+foreach ([BASE_PATH . '/.env', APP_PATH . '/.env', dirname(BASE_PATH) . '/.env'] as $envFile) {
+    if (file_exists($envFile) && is_readable($envFile)) {
+        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#')) continue;
+            if (str_contains($line, '=')) {
+                [$k, $v] = explode('=', $line, 2);
+                $k = trim($k);
+                $v = trim($v, " \t\n\r\0\x0B\"'");
+                if (!array_key_exists($k, $_SERVER) && !array_key_exists($k, $_ENV)) {
+                    putenv("$k=$v");
+                    $_ENV[$k] = $v;
+                    $_SERVER[$k] = $v;
+                }
+            }
+        }
+        break;
+    }
+}
+
+// Optional local overrides
+if (file_exists(APP_PATH . '/config.local.php')) {
+    require_once APP_PATH . '/config.local.php';
+}
+
 // Automatically detect base URL path for subfolder hosting (e.g. /portal)
 $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
 $baseUri = rtrim(str_replace('\\', '/', $scriptDir), '/');
@@ -24,13 +51,13 @@ define('BASE_URI', $baseUri === '' ? '' : $baseUri);
 
 // --------------------------------------------------------------------------
 // 2. Database Credentials
-// Hostinger uses localhost for MySQL
+// Hostinger uses 'localhost' via UNIX domain socket for MySQL
 // --------------------------------------------------------------------------
-define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
-define('DB_PORT', (int)(getenv('DB_PORT') ?: 3306));
-define('DB_NAME', getenv('DB_NAME') ?: 'sarvoocch_portal');
-define('DB_USER', getenv('DB_USER') ?: 'sarvoocch_user');
-define('DB_PASS', getenv('DB_PASS') ?: ''); // Set via .env or server environment
+if (!defined('DB_HOST')) define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+if (!defined('DB_PORT')) define('DB_PORT', (int)(getenv('DB_PORT') ?: 3306));
+if (!defined('DB_NAME')) define('DB_NAME', getenv('DB_NAME') ?: 'u170129876_q1gD8');
+if (!defined('DB_USER')) define('DB_USER', getenv('DB_USER') ?: 'u170129876_q1gD8');
+if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') ?: ''); // Set your Hostinger MySQL password here or in .env
 
 // --------------------------------------------------------------------------
 // 3. Security & Application Secrets
@@ -78,40 +105,46 @@ define('NAV', [
     ['pregrt', 'Pre-GRT (Group Form)', 'pregrt_list', 'people-fill'],
     ['apply', 'New Application', 'apply', 'file-earmark-plus'],
     ['applications', 'Applications', 'applications', 'files'],
-    ['loans', 'Loans & EMI', 'loans', 'cash-coin'],
-    ['reports', 'Reports', 'reports', 'file-earmark-bar-graph'],
-    ['kyc', 'KYC Verify', 'kyc', 'shield-check'],
+    ['approve', 'Approvals', 'approvals', 'check2-circle'],
+    ['disburse', 'Disbursements', 'disbursements', 'cash-stack'],
+    ['loans', 'Loan Accounts', 'loans', 'bank'],
+    ['payments', 'Collect Repayment', 'payments', 'credit-card'],
     ['calculator', 'EMI Calculator', 'calculator', 'calculator'],
-    ['products', 'Loan Products', 'products', 'box-seam'],
-    ['field', 'Field Operations', 'field', 'geo-alt'],
-    ['sync', 'Offline Sync', 'sync', 'arrow-repeat'],
-    ['whatsapp', 'WhatsApp', 'whatsapp', 'whatsapp'],
-    ['employees', 'Employees', 'employees', 'person-badge'],
-    ['hrm', 'HRM', 'hrm', 'briefcase'],
-    ['attendance', 'Attendance', 'attendance', 'clock-history'],
-    ['branches', 'Branches', 'branches', 'building'],
-    ['settings', 'Settings', 'settings', 'gear'],
-    ['users', 'Users & Roles', 'users', 'key']
+    ['field', 'Field Ops & GPS', 'field', 'geo-alt'],
+    ['employees', 'Employee Directory', 'employees', 'person-badge'],
+    ['hrm', 'HRM & Leave', 'hrm', 'briefcase'],
+    ['attendance', 'Daily Attendance', 'attendance', 'clock-history'],
+    ['reports', 'Reports & Compliance', 'reports', 'file-earmark-bar-graph'],
+    ['products', 'Loan Products', 'products', 'tags'],
+    ['branches', 'Branches & Geo-Fence', 'branches', 'building'],
+    ['holidays', 'Holiday Calendar', 'holidays', 'calendar3'],
+    ['settings', 'System Settings', 'settings', 'gear'],
+    ['users', 'User Administration', 'users', 'shield-lock'],
+    ['whatsapp', 'WhatsApp Broadcast', 'whatsapp', 'whatsapp'],
+    ['sync', 'Offline Sync Logs', 'sync', 'arrow-repeat']
 ]);
 
 // --------------------------------------------------------------------------
-// 5. Default Business Constants & Fallback Parameters
+// 5. System Setting Definitions
+// --------------------------------------------------------------------------
+define('SETTING_DEFS', [
+    ['min_age', 'Minimum Borrower Age (Years)', 18, 'int'],
+    ['max_age', 'Maximum Borrower Age (Years)', 55, 'int'],
+    ['group_min', 'Minimum Group Members (JLG)', 2, 'int'],
+    ['group_max', 'Maximum Group Members (JLG)', 5, 'int'],
+    ['income_limit', 'Maximum Monthly Household Income (₹)', 25000, 'int'],
+    ['emi_pct', 'Maximum FOIR / EMI Ratio (%)', 60, 'int'],
+    ['gst_rate', 'GST on Processing Fee (%)', 18, 'float'],
+    ['att_hours', 'Daily Working Shift Hours', 8, 'float']
+]);
+
+// --------------------------------------------------------------------------
+// 6. Default Branches (Seeded in schema)
 // --------------------------------------------------------------------------
 define('DEFAULT_BRANCHES', [
-    ['Bhopal Head Office', 'BPL-HO', 'Shop No. 10A/GF, Sagar High Street, Ayodhya Bypass, Bhopal - 462041', 23.27993, 77.45220],
-    ['Pipariya Branch', 'PPR', 'Pipariya, Narmadapuram, Madhya Pradesh', 22.73875, 78.35635],
-    ['Indore - Vijay Nagar', 'IND-VN', 'Vijay Nagar, Indore', 22.7533, 75.8937],
-    ['Indore - Palasia', 'IND-PL', 'Palasia, Indore', 22.7241, 75.8839],
-    ['Bhopal - MP Nagar', 'BPL-MP', 'MP Nagar, Bhopal', 23.2332, 77.4340]
-]);
-
-define('SETTING_DEFS', [
-    ['min_age', 'Minimum borrower age (years)', 18, 'int'],
-    ['max_age', 'Maximum borrower age (years)', 55, 'int'],
-    ['group_min', 'Minimum members in a group', 2, 'int'],
-    ['group_max', 'Maximum members in a group', 5, 'int'],
-    ['income_limit', 'Household monthly income limit (Rs)', 25000, 'num'],
-    ['emi_pct', 'Maximum EMI as % of household monthly income', 60, 'num'],
-    ['gst_rate', 'GST rate on the processing fee (%), shown as half CGST + half SGST', 18, 'num'],
-    ['att_hours', 'Minimum hours worked before punch-out is allowed', 8, 'num']
+    ['Bhopal Head Office', 'BPL-HO', 'Shop No. 10A/GF, Sagar High Street, Ayodhya Bypass, Bhopal - 462041', '9111199101', 23.279930, 77.452200],
+    ['Pipariya Branch', 'PPR', 'Pipariya, Narmadapuram District, Madhya Pradesh', '9800000001', 22.738750, 78.356346],
+    ['Indore - Vijay Nagar', 'IND-VN', 'Vijay Nagar Commercial Complex, Indore, Madhya Pradesh', '9800000002', 22.753300, 75.893700],
+    ['Indore - Palasia', 'IND-PL', 'Palasia Square, Indore, Madhya Pradesh', '9800000003', 22.724100, 75.883900],
+    ['Bhopal - MP Nagar', 'BPL-MP', 'Zone II, MP Nagar, Bhopal, Madhya Pradesh', '9800000004', 23.233200, 77.434000]
 ]);
