@@ -1,0 +1,56 @@
+# ==========================================================
+# SARVOOCCH Microcare Foundation - Portal Subfolder Routing
+# Optimized for Hostinger LiteSpeed Web Server + PHP 8.3
+# Target URL: https://sarvocchfinance.com/portal
+# ==========================================================
+
+Options -Indexes
+RewriteEngine On
+
+# 1. Base URL for subfolder
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /portal/
+
+    # Security: Block direct access to app, database, and storage directories
+    RewriteRule ^(app|database|storage)/ - [F,L]
+
+    # Serve static assets directly if they exist on disk
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Send all other requests to Front Controller
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# 2. Block direct access to hidden files, dotfiles and sensitive extensions
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(env|sql|db|sqlite|log|json|md|py|sh|yml|yaml|ini|lock)$">
+    Require all denied
+</FilesMatch>
+
+# 3. Security Headers (LiteSpeed Supported)
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 4. LiteSpeed / PHP 8.3 Execution Directives
+<IfModule mod_php.c>
+    php_value upload_max_filesize 16M
+    php_value post_max_size 18M
+    php_value max_execution_time 60
+    php_value max_input_time 60
+    php_value session.cookie_httponly 1
+    php_value session.cookie_samesite Lax
+</IfModule>
+
+# 5. Character Encoding & Default Document
+AddDefaultCharset UTF-8
+DirectoryIndex index.php
