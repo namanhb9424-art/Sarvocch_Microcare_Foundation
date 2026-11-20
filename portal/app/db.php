@@ -17,21 +17,19 @@ class Database {
             return self::$instance;
         }
 
+        // Only allow SQLite when explicit environment flag USE_SQLITE=1 is set (dev/testing)
+        $useSqlite = (getenv('USE_SQLITE') === '1' || (defined('USE_SQLITE') && USE_SQLITE === true));
         $sqlitePath = STORAGE_PATH . '/sarvocch.db';
 
-        try {
-            // Attempt MySQL connection if credentials are configured
-            if (!empty(DB_PASS) || getenv('FORCE_MYSQL') === '1') {
-                $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
-                $options = [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES => false,
-                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-                ];
-                self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
-            } elseif (file_exists($sqlitePath)) {
-                // If MySQL password is not yet configured, use pre-seeded SQLite immediately
+        if ($useSqlite) {
+            if (!file_exists($sqlitePath)) {
+                error_log("SQLite development database not found at: " . $sqlitePath);
+                http_response_code(503);
+                header('Retry-After: 60');
+                echo "<h1>503 Service Unavailable</h1><p>Embedded development database not found.</p>";
+                exit;
+            }
+            try {
                 $options = [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
@@ -45,38 +43,57 @@ class Database {
                     self::$instance->sqliteCreateFunction('CURDATE', fn() => date('Y-m-d'));
                 }
                 return self::$instance;
-            } else {
-                // Try MySQL anyway if SQLite database does not exist
-                $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
-                $options = [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-                ];
-                self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
-            }
-        } catch (PDOException $e) {
-            // Fallback to SQLite if MySQL fails
-            if (file_exists($sqlitePath) || getenv('USE_SQLITE') === '1') {
-                $options = [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-                ];
-                self::$instance = new PDO('sqlite:' . $sqlitePath, null, null, $options);
-                self::$instance->exec("PRAGMA journal_mode=WAL;");
-                self::$instance->exec("PRAGMA foreign_keys=ON;");
-                self::$instance->exec("PRAGMA busy_timeout=5000;");
-                if (method_exists(self::$instance, 'sqliteCreateFunction')) {
-                    self::$instance->sqliteCreateFunction('NOW', fn() => date('Y-m-d H:i:s'));
-                    self::$instance->sqliteCreateFunction('CURDATE', fn() => date('Y-m-d'));
-                }
-            } else {
-                throw new Exception("Database Connection Failed: " . $e->getMessage() . " [Host: " . DB_HOST . ", Database: " . DB_NAME . ", User: " . DB_USER . "]");
+            } catch (PDOException $e) {
+                error_log("SQLite Connection Error: " . $e->getMessage());
+                http_response_code(503);
+                header('Retry-After: 60');
+                echo "<h1>503 Service Unavailable</h1><p>Database engine error. Please try again later.</p>";
+                exit;
             }
         }
 
-        if (self::$instance->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' && method_exists(self::$instance, 'sqliteCreateFunction')) {
-            self::$instance->sqliteCreateFunction('NOW', fn() => date('Y-m-d H:i:s'));
-            self::$instance->sqliteCreateFunction('CURDATE', fn() => date('Y-m-d'));
+        // Production MySQL Connection (USE_SQLITE != 1)
+        try {
+            $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
+            $options = [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+            ];
+            self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
+        } catch (PDOException $e) {
+            // Log error internally without leaking credentials or stack traces to client
+            error_log("Production MySQL Connection Failure: " . $e->getMessage());
+
+            http_response_code(503);
+            header('Retry-After: 60');
+            ?>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>503 Service Temporarily Unavailable · SARVOOCCH</title>
+<style>
+  body { background: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; color: #334155; }
+  .card { max-width: 500px; width: 90%; background: #ffffff; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); padding: 2.5rem; text-align: center; }
+  h2 { color: #0f766e; margin-top: 0; font-size: 1.5rem; }
+  p { font-size: 0.95rem; line-height: 1.5; color: #64748b; }
+  .code { display: inline-block; padding: 0.25rem 0.6rem; background: #f1f5f9; border-radius: 4px; font-size: 0.85rem; color: #475569; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>SARVOOCCH Microcare Foundation</h2>
+  <p>The enterprise financial portal is temporarily undergoing scheduled maintenance or database synchronization.</p>
+  <p>Please try again in a few moments.</p>
+  <div class="code">HTTP 503 · Service Temporarily Unavailable</div>
+</div>
+</body>
+</html>
+            <?php
+            exit;
         }
 
         return self::$instance;

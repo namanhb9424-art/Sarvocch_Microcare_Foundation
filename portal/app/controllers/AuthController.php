@@ -49,8 +49,13 @@ class AuthController {
     public function loginPost(): void {
         csrf_verify();
 
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-        $rateKey = 'login:' . $ip;
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $clientIp = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        if (str_contains($clientIp, ',')) {
+            $clientIp = trim(explode(',', $clientIp)[0]);
+        }
+        $rateKey = 'login:' . hash('sha256', strtolower($username) . '|' . $clientIp);
 
         // Rate limit: 10 attempts per 10 minutes
         if (!Auth::checkRateLimit($rateKey, 10, 600)) {
@@ -58,9 +63,6 @@ class AuthController {
             $this->loginForm();
             return;
         }
-
-        $username = trim($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
 
         if (empty($username) || empty($password)) {
             flash("Username and password are required.", "danger");
@@ -77,6 +79,8 @@ class AuthController {
         }
 
         if ($u && Auth::verifyPassword($password, $u['pw'])) {
+            session_regenerate_id(true);
+
             // Re-hash to bcrypt if stored with legacy format
             if (!password_verify($password, $u['pw'])) {
                 $newHash = Auth::hashPassword($password);
