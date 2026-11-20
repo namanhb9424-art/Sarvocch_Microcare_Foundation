@@ -18,7 +18,14 @@ define('STORAGE_PATH', BASE_PATH . '/storage');
 define('UPLOAD_DIR', STORAGE_PATH . '/uploads');
 
 // Load environment variables from .env if present
-foreach ([BASE_PATH . '/.env', APP_PATH . '/.env', dirname(BASE_PATH) . '/.env'] as $envFile) {
+$possibleEnvFiles = [];
+foreach ([BASE_PATH, APP_PATH, dirname(BASE_PATH)] as $dir) {
+    $possibleEnvFiles[] = $dir . '/.env';
+    $possibleEnvFiles[] = $dir . '/. env';
+    $possibleEnvFiles[] = $dir . '/.env.txt';
+}
+
+foreach ($possibleEnvFiles as $envFile) {
     if (file_exists($envFile) && is_readable($envFile)) {
         $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         foreach ($lines as $line) {
@@ -28,11 +35,9 @@ foreach ([BASE_PATH . '/.env', APP_PATH . '/.env', dirname(BASE_PATH) . '/.env']
                 [$k, $v] = explode('=', $line, 2);
                 $k = trim($k);
                 $v = trim($v, " \t\n\r\0\x0B\"'");
-                if (!array_key_exists($k, $_SERVER) && !array_key_exists($k, $_ENV)) {
-                    putenv("$k=$v");
-                    $_ENV[$k] = $v;
-                    $_SERVER[$k] = $v;
-                }
+                @putenv("$k=$v");
+                $_ENV[$k] = $v;
+                $_SERVER[$k] = $v;
             }
         }
         break;
@@ -44,6 +49,15 @@ if (file_exists(APP_PATH . '/config.local.php')) {
     require_once APP_PATH . '/config.local.php';
 }
 
+// Helper to reliably read environment across all PHP SAPI / disable_functions environments
+$cfgGet = function(string $key, mixed $default = null): mixed {
+    if (isset($_ENV[$key]) && $_ENV[$key] !== '') return $_ENV[$key];
+    if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return $_SERVER[$key];
+    $val = @getenv($key);
+    if ($val !== false && $val !== '') return $val;
+    return $default;
+};
+
 // Automatically detect base URL path for subfolder hosting (e.g. /portal)
 $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
 $baseUri = rtrim(str_replace('\\', '/', $scriptDir), '/');
@@ -53,20 +67,20 @@ define('BASE_URI', $baseUri === '' ? '' : $baseUri);
 // 2. Database Credentials
 // Hostinger uses 'localhost' via UNIX domain socket for MySQL
 // --------------------------------------------------------------------------
-if (!defined('DB_HOST')) define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-if (!defined('DB_PORT')) define('DB_PORT', (int)(getenv('DB_PORT') ?: 3306));
-if (!defined('DB_NAME')) define('DB_NAME', getenv('DB_NAME') ?: 'u170129876_q1gD8');
-if (!defined('DB_USER')) define('DB_USER', getenv('DB_USER') ?: 'u170129876_q1gD8');
-if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') ?: ''); // Set your Hostinger MySQL password here or in .env
+if (!defined('DB_HOST')) define('DB_HOST', $cfgGet('DB_HOST', 'localhost'));
+if (!defined('DB_PORT')) define('DB_PORT', (int)$cfgGet('DB_PORT', 3306));
+if (!defined('DB_NAME')) define('DB_NAME', $cfgGet('DB_NAME', 'u170129876_15wvs'));
+if (!defined('DB_USER')) define('DB_USER', $cfgGet('DB_USER', 'u170129876_7UJs1'));
+if (!defined('DB_PASS')) define('DB_PASS', $cfgGet('DB_PASS', ''));
 
 // --------------------------------------------------------------------------
 // 3. Security & Application Secrets
 // --------------------------------------------------------------------------
-define('SECRET_KEY', getenv('SECRET_KEY') ?: getenv('APP_KEY') ?: 'sarvoocch_prod_secure_token_key_2026_9111199101');
+define('SECRET_KEY', $cfgGet('SECRET_KEY', $cfgGet('APP_KEY', 'sarvoocch_prod_secure_token_key_2026_9111199101')));
 if (!defined('APP_KEY')) define('APP_KEY', SECRET_KEY);
-define('AADHAAR_HMAC_KEY', getenv('AADHAAR_HMAC_KEY') ?: 'sarvoocch_aadhaar_hmac_secret_key_2026_salt');
-define('APP_DEBUG', (getenv('APP_DEBUG') === '1' || getenv('FLASK_DEBUG') === '1'));
-define('DISABLE_DEMO_LOGINS', getenv('DISABLE_DEMO_LOGINS') === '1' || !APP_DEBUG);
+define('AADHAAR_HMAC_KEY', $cfgGet('AADHAAR_HMAC_KEY', 'sarvoocch_aadhaar_hmac_secret_key_2026_salt'));
+define('APP_DEBUG', ($cfgGet('APP_DEBUG') === '1' || $cfgGet('FLASK_DEBUG') === '1'));
+define('DISABLE_DEMO_LOGINS', ($cfgGet('DISABLE_DEMO_LOGINS') === '1' || !APP_DEBUG));
 
 // Session lifetime (in minutes)
 define('SESSION_LIFETIME_MIN', 60);

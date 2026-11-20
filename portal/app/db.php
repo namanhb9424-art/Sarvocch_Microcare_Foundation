@@ -18,7 +18,10 @@ class Database {
         }
 
         // Only allow SQLite when explicit environment flag USE_SQLITE=1 is set (dev/testing)
-        $useSqlite = (getenv('USE_SQLITE') === '1' || (defined('USE_SQLITE') && USE_SQLITE === true));
+        $useSqlite = (
+            ($_ENV['USE_SQLITE'] ?? $_SERVER['USE_SQLITE'] ?? getenv('USE_SQLITE')) === '1'
+            || (defined('USE_SQLITE') && USE_SQLITE === true)
+        );
         $sqlitePath = STORAGE_PATH . '/sarvocch.db';
 
         if ($useSqlite) {
@@ -89,6 +92,15 @@ class Database {
   <p>The enterprise financial portal is temporarily undergoing scheduled maintenance or database synchronization.</p>
   <p>Please try again in a few moments.</p>
   <div class="code">HTTP 503 · Service Temporarily Unavailable</div>
+  <?php if ((defined('APP_DEBUG') && APP_DEBUG) || (isset($_GET['debug']) && $_GET['debug'] === '1')): ?>
+    <div style="margin-top:1.5rem; text-align:left; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:0.75rem; font-size:0.8rem; color:#991b1b; word-break:break-all; font-family:monospace;">
+      <strong>Diagnostics (Debug Mode):</strong><br>
+      Host: <?= htmlspecialchars(DB_HOST) ?>:<?= htmlspecialchars((string)DB_PORT) ?><br>
+      Database: <?= htmlspecialchars(DB_NAME) ?><br>
+      User: <?= htmlspecialchars(DB_USER) ?><br>
+      Error: <?= htmlspecialchars($e->getMessage()) ?>
+    </div>
+  <?php endif; ?>
 </div>
 </body>
 </html>
