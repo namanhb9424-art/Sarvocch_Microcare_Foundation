@@ -1,0 +1,15 @@
+<?php
+/**
+ * Direct Hostinger Configuration Override (Zero-Dependence on .env)
+ * If Hostinger File Manager blocks hidden .env files or disables putenv(),
+ * simply copy this file as: portal/app/config.local.php
+ */
+define('DB_HOST', 'localhost');
+define('DB_PORT', 3306);
+define('DB_NAME', 'u170129876_15wvs');
+define('DB_USER', 'u170129876_7UJs1');
+define('DB_PASS', 'your_mysql_password_here');
+
+define('APP_KEY', '6a197d27dded78f63da64709d2b85574ce2a2d03f804783befc0488ef8243ecd');
+define('SECRET_KEY', APP_KEY);
+define('AADHAAR_HMAC_KEY', '0cf8bf25309344ad8ad06480a11772c716a68b37a516bb50d64d6895059631cb');
