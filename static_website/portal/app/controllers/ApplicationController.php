@@ -23,7 +23,11 @@ class ApplicationController {
             $sql .= " AND a.status = ?";
             $params[] = $status;
         }
-        if (!empty($branch)) {
+        if ($u['role'] !== 'admin') {
+            $branch = $u['branch'] ?? '';
+            $sql .= " AND a.branch = ?";
+            $params[] = $branch;
+        } elseif (!empty($branch)) {
             $sql .= " AND a.branch = ?";
             $params[] = $branch;
         }
@@ -54,6 +58,7 @@ class ApplicationController {
             flash("Application not found.", "danger");
             redirect(url('/applications'));
         }
+        assert_branch_access($app['branch']);
 
         $extra = q("SELECT * FROM app_extra WHERE application_id=?", [$aid], true);
         $approvals = q("SELECT * FROM approvals WHERE application_id=? ORDER BY id ASC", [$aid]);
@@ -86,6 +91,7 @@ class ApplicationController {
             flash("Application not found.", "danger");
             redirect(url('/applications'));
         }
+        assert_branch_access($app['branch']);
 
         if ($action === 'approve') {
             need('approve');
@@ -128,8 +134,11 @@ class ApplicationController {
 
     public function applyForm(): void {
         need('apply');
+        $u = current_user();
         $products = q("SELECT * FROM products WHERE active=1 ORDER BY id");
-        $customers = q("SELECT id, name, phone, branch FROM customers ORDER BY name LIMIT 200");
+        $customers = ($u['role'] !== 'admin')
+            ? q("SELECT id, name, phone, branch FROM customers WHERE branch=? ORDER BY name LIMIT 200", [$u['branch'] ?? ''])
+            : q("SELECT id, name, phone, branch FROM customers ORDER BY name LIMIT 200");
         view('applications/apply', [
             'products' => $products,
             'customers' => $customers
@@ -153,7 +162,15 @@ class ApplicationController {
         $coPhone = trim($_POST['co_phone'] ?? '');
         $coRelation = trim($_POST['co_relation'] ?? 'Husband');
         $coIncome = (float)($_POST['co_income'] ?? 0);
-        $branch = $_POST['branch'] ?? ($u['branch'] ?? 'Bhopal Head Office');
+
+        $c = q("SELECT branch FROM customers WHERE id=?", [$cid], true);
+        if (!$c) {
+            flash("Customer not found.", "danger");
+            redirect(url('/apply'));
+        }
+        assert_branch_access($c['branch']);
+
+        $branch = ($u['role'] !== 'admin') ? ($u['branch'] ?? 'Bhopal Head Office') : ($_POST['branch'] ?? ($u['branch'] ?? 'Bhopal Head Office'));
 
         $p = q("SELECT * FROM products WHERE id=?", [$pid], true);
         if (!$p) {
@@ -190,6 +207,7 @@ class ApplicationController {
         if (!$app) {
             die("Application not found");
         }
+        assert_branch_access($app['branch']);
 
         // Return printable HTML view which can be saved directly as PDF or printed
         view('applications/sanction_print', [

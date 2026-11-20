@@ -165,6 +165,44 @@ function need(string ...$modules): void {
     Auth::need(...$modules);
 }
 
+function require_login(): array {
+    $u = current_user();
+    if (!$u) {
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $isApi = str_starts_with($uri, '/api') || 
+                 (defined('BASE_URI') && BASE_URI !== '' && str_starts_with($uri, BASE_URI . '/api')) ||
+                 (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'));
+        if ($isApi) {
+            http_response_code(401);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => '401 Unauthorized: Valid authenticated session required.']);
+            exit;
+        }
+        $next = $uri ?: '/';
+        redirect(url('/login?next=' . urlencode($next)));
+    }
+    return $u;
+}
+
+function assert_branch_access(?string $recordBranch): void {
+    $u = current_user();
+    if (!$u) {
+        require_login();
+    }
+    // Admin role has global access across all branches
+    if (($u['role'] ?? '') === 'admin') {
+        return;
+    }
+    // Enforce matching branch for all other roles
+    $userBranch = trim($u['branch'] ?? '');
+    $recBranch = trim((string)$recordBranch);
+    if ($userBranch === '' || $recBranch === '' || strcasecmp($userBranch, $recBranch) !== 0) {
+        http_response_code(403);
+        view('errors/403', ['msg' => 'Access Denied: You do not have authorization to view or modify records belonging to other branches.']);
+        exit;
+    }
+}
+
 function csrf_token(): string {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -178,8 +216,15 @@ function csrf_field(): string {
 
 function csrf_verify(): void {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-        if (!hash_equals(csrf_token(), $token)) {
+        $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_SERVER['HTTP_X_XSRF_TOKEN'] ?? '';
+        if (empty($token)) {
+            $raw = file_get_contents('php://input');
+            $data = json_decode($raw, true);
+            if (is_array($data) && !empty($data['csrf_token'])) {
+                $token = $data['csrf_token'];
+            }
+        }
+        if (empty($token) || !hash_equals(csrf_token(), $token)) {
             http_response_code(400);
             die("Security Verification Failed: Invalid CSRF Token.");
         }

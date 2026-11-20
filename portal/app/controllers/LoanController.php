@@ -21,7 +21,11 @@ class LoanController {
             $sql .= " AND l.status = ?";
             $params[] = $status;
         }
-        if (!empty($branch)) {
+        if ($u['role'] !== 'admin') {
+            $branch = $u['branch'] ?? '';
+            $sql .= " AND l.branch = ?";
+            $params[] = $branch;
+        } elseif (!empty($branch)) {
             $sql .= " AND l.branch = ?";
             $params[] = $branch;
         }
@@ -49,6 +53,7 @@ class LoanController {
             flash("Loan record not found.", "danger");
             redirect(url('/loans'));
         }
+        assert_branch_access($loan['branch']);
 
         $schedule = q("SELECT * FROM schedule WHERE loan_id=? ORDER BY no ASC", [$lid]);
         $payments = q("SELECT * FROM payments WHERE loan_id=? ORDER BY id DESC", [$lid]);
@@ -69,6 +74,12 @@ class LoanController {
         need('loans');
         $loan = q("SELECT l.*, c.name as customer_name, c.phone, c.address, c.dob, p.name as product_name " .
                   "FROM loans l JOIN customers c ON l.customer_id=c.id JOIN products p ON l.product_id=p.id WHERE l.id=?", [$lid], true);
+        if (!$loan) {
+            flash("Loan record not found.", "danger");
+            redirect(url('/loans'));
+        }
+        assert_branch_access($loan['branch']);
+
         $schedule = q("SELECT * FROM schedule WHERE loan_id=? ORDER BY no ASC", [$lid]);
 
         view('loans/card', [
@@ -86,6 +97,7 @@ class LoanController {
         if (!$loan || $loan['status'] !== 'closed') {
             die("NOC is only issued for fully closed loans.");
         }
+        assert_branch_access($loan['branch']);
 
         view('loans/noc_print', [
             'l' => $loan,
@@ -95,7 +107,12 @@ class LoanController {
 
     public function settleForm(int $lid): void {
         need('loans', 'payments');
-        $loan = q("SELECT l.*, c.name as customer_name FROM loans l JOIN customers c ON l.customer_id=c.id WHERE l.id=?", [$lid], true);
+        $loan = q("SELECT l.*, c.name as customer_name, l.branch FROM loans l JOIN customers c ON l.customer_id=c.id WHERE l.id=?", [$lid], true);
+        if (!$loan) {
+            flash("Loan record not found.", "danger");
+            redirect(url('/loans'));
+        }
+        assert_branch_access($loan['branch']);
         $quote = Finance::settlementQuote($lid);
 
         view('loans/settle', [
@@ -119,6 +136,7 @@ class LoanController {
                 flash("Loan is already closed or invalid.", "warning");
                 redirect(url('/loans/' . $lid));
             }
+            assert_branch_access($loan['branch']);
 
             $quote = Finance::settlementQuote($lid);
             if (!$quote) {
@@ -149,7 +167,12 @@ class LoanController {
 
     public function payForm(int $lid): void {
         need('payments');
-        $loan = q("SELECT l.*, c.name as customer_name FROM loans l JOIN customers c ON l.customer_id=c.id WHERE l.id=?", [$lid], true);
+        $loan = q("SELECT l.*, c.name as customer_name, l.branch FROM loans l JOIN customers c ON l.customer_id=c.id WHERE l.id=?", [$lid], true);
+        if (!$loan) {
+            flash("Loan record not found.", "danger");
+            redirect(url('/loans'));
+        }
+        assert_branch_access($loan['branch']);
         $nextEmi = q("SELECT * FROM schedule WHERE loan_id=? AND paid=0 ORDER BY no ASC LIMIT 1", [$lid], true);
 
         view('loans/pay', [
@@ -161,6 +184,13 @@ class LoanController {
     public function payPost(int $lid): void {
         csrf_verify();
         need('payments');
+
+        $loan = q("SELECT * FROM loans WHERE id=?", [$lid], true);
+        if (!$loan) {
+            flash("Loan record not found.", "danger");
+            redirect(url('/loans'));
+        }
+        assert_branch_access($loan['branch']);
 
         $schedId = (int)($_POST['schedule_id'] ?? 0);
         $channel = $_POST['channel'] ?? 'CASH';
@@ -182,6 +212,9 @@ class LoanController {
 
         $cid = (int)($u['customer_id'] ?? 0);
         $customer = q("SELECT * FROM customers WHERE id=?", [$cid], true);
+        if ($customer) {
+            assert_branch_access($customer['branch']);
+        }
         $loans = q("SELECT l.*, p.name as product_name FROM loans l JOIN products p ON l.product_id=p.id WHERE l.customer_id=? ORDER BY l.id DESC", [$cid]);
 
         view('loans/portal', [

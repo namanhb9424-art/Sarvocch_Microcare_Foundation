@@ -8,7 +8,10 @@ if (!defined('SARVOOCCH_APP')) exit;
 class KycController {
     public function verifyList(): void {
         need('kyc');
-        $customers = q("SELECT c.*, k.id as kyc_form_id FROM customers c LEFT JOIN kyc_forms k ON c.id=k.customer_id ORDER BY c.id DESC LIMIT 100");
+        $u = current_user();
+        $customers = ($u['role'] !== 'admin')
+            ? q("SELECT c.*, k.id as kyc_form_id FROM customers c LEFT JOIN kyc_forms k ON c.id=k.customer_id WHERE c.branch=? ORDER BY c.id DESC LIMIT 100", [$u['branch'] ?? ''])
+            : q("SELECT c.*, k.id as kyc_form_id FROM customers c LEFT JOIN kyc_forms k ON c.id=k.customer_id ORDER BY c.id DESC LIMIT 100");
         view('kyc/verify', ['customers' => $customers]);
     }
 
@@ -28,6 +31,7 @@ class KycController {
             flash("Customer not found.", "danger");
             redirect(url('/crm'));
         }
+        assert_branch_access($c['branch']);
         $kyc = q("SELECT * FROM kyc_forms WHERE customer_id=?", [$cid], true);
 
         view('kyc/form', [
@@ -44,9 +48,16 @@ class KycController {
 
         $name = trim($_POST['name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
-        $branch = $_POST['branch'] ?? ($u['branch'] ?? 'Bhopal Head Office');
+        $branch = ($u['role'] !== 'admin') ? ($u['branch'] ?? 'Bhopal Head Office') : ($_POST['branch'] ?? ($u['branch'] ?? 'Bhopal Head Office'));
 
-        if ($cid === null) {
+        if ($cid !== null) {
+            $c = q("SELECT branch FROM customers WHERE id=?", [$cid], true);
+            if (!$c) {
+                flash("Customer not found.", "danger");
+                redirect(url('/crm'));
+            }
+            assert_branch_access($c['branch']);
+        } else {
             // Create customer record first
             if (empty($name) || empty($phone)) {
                 flash("Customer Name and Phone are required.", "danger");
@@ -186,11 +197,12 @@ class KycController {
     public function printForm(int $cid): void {
         need('kycform', 'kyc');
         $c = q("SELECT * FROM customers WHERE id=?", [$cid], true);
-        $kyc = q("SELECT * FROM kyc_forms WHERE customer_id=?", [$cid], true);
         if (!$c) {
             flash("Customer not found.", "danger");
             redirect(url('/crm'));
         }
+        assert_branch_access($c['branch']);
+        $kyc = q("SELECT * FROM kyc_forms WHERE customer_id=?", [$cid], true);
 
         view('kyc/print', [
             'c' => $c,

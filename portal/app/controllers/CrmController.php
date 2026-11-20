@@ -23,7 +23,11 @@ class CrmController {
         $sql = "SELECT c.*, u.name as agent_name FROM customers c LEFT JOIN users u ON c.agent_id=u.id WHERE 1=1";
         $params = [];
 
-        if (!empty($branch)) {
+        if ($u['role'] !== 'admin') {
+            $branch = $u['branch'] ?? '';
+            $sql .= " AND c.branch = ?";
+            $params[] = $branch;
+        } elseif (!empty($branch)) {
             $sql .= " AND c.branch = ?";
             $params[] = $branch;
         }
@@ -45,7 +49,9 @@ class CrmController {
         $sql .= " ORDER BY c.id DESC LIMIT 100";
         $customers = q($sql, $params);
 
-        $agents = q("SELECT id, name, branch FROM users WHERE role='field_agent' ORDER BY name");
+        $agents = ($u['role'] !== 'admin')
+            ? q("SELECT id, name, branch FROM users WHERE role='field_agent' AND branch=? ORDER BY name", [$u['branch'] ?? ''])
+            : q("SELECT id, name, branch FROM users WHERE role='field_agent' ORDER BY name");
 
         view('crm/list', [
             'customers' => $customers,
@@ -68,7 +74,7 @@ class CrmController {
         $phone = trim($_POST['phone'] ?? '');
         $dob = $_POST['dob'] ?? null;
         $address = trim($_POST['address'] ?? '');
-        $branch = $_POST['branch'] ?? ($u['branch'] ?? 'Bhopal Head Office');
+        $branch = ($u['role'] !== 'admin') ? ($u['branch'] ?? 'Bhopal Head Office') : ($_POST['branch'] ?? ($u['branch'] ?? 'Bhopal Head Office'));
         $agentId = $u['role'] === 'field_agent' ? (int)$u['id'] : (!empty($_POST['agent_id']) ? (int)$_POST['agent_id'] : null);
 
         if (empty($name) || empty($phone)) {
@@ -95,6 +101,7 @@ class CrmController {
             flash("Customer not found.", "danger");
             redirect(url('/crm'));
         }
+        assert_branch_access($customer['branch']);
 
         $kyc = q("SELECT * FROM kyc_forms WHERE customer_id=?", [$cid], true);
         $applications = q("SELECT a.*, p.name as product_name FROM applications a JOIN products p ON a.product_id=p.id WHERE a.customer_id=? ORDER BY a.id DESC", [$cid]);
@@ -117,6 +124,13 @@ class CrmController {
         need('crm');
         $u = current_user();
 
+        $c = q("SELECT branch FROM customers WHERE id=?", [$cid], true);
+        if (!$c) {
+            flash("Customer not found.", "danger");
+            redirect(url('/crm'));
+        }
+        assert_branch_access($c['branch']);
+
         $channel = $_POST['channel'] ?? 'Call';
         $note = trim($_POST['note'] ?? '');
 
@@ -132,6 +146,14 @@ class CrmController {
     public function updateStage(int $cid): void {
         csrf_verify();
         need('crm');
+
+        $c = q("SELECT branch FROM customers WHERE id=?", [$cid], true);
+        if (!$c) {
+            flash("Customer not found.", "danger");
+            redirect(url('/crm'));
+        }
+        assert_branch_access($c['branch']);
+
         $stage = $_POST['stage'] ?? 'lead';
         ex("UPDATE customers SET stage=? WHERE id=?", [$stage, $cid]);
         flash("Customer stage updated to " . htmlspecialchars($stage), "info");
@@ -148,6 +170,7 @@ class CrmController {
             flash("Customer not found.", "danger");
             redirect(url('/crm'));
         }
+        assert_branch_access($c['branch']);
 
         $cleanPhone = preg_replace('/\D/', '', $c['phone'] ?? '');
         $uname = 'c_' . ($cleanPhone ? substr($cleanPhone, -6) : $cid);
@@ -174,6 +197,12 @@ class CrmController {
     public function loginSlip(int $cid): void {
         need('crm');
         $c = q("SELECT * FROM customers WHERE id=?", [$cid], true);
+        if (!$c) {
+            flash("Customer not found.", "danger");
+            redirect(url('/crm'));
+        }
+        assert_branch_access($c['branch']);
+
         $u = q("SELECT * FROM users WHERE customer_id=?", [$cid], true);
         $temp = $_SESSION['temp_cred_' . $cid] ?? null;
 

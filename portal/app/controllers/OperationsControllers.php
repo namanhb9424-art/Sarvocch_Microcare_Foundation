@@ -43,11 +43,13 @@ class SyncController {
     }
 
     public function post(): void {
+        $u = require_login();
+        csrf_verify();
+
         $raw = file_get_contents('php://input');
         $data = json_decode($raw, true) ?: [];
         $uuid = $data['uuid'] ?? bin2hex(random_bytes(16));
-        $u = current_user();
-        $uid = $u ? $u['id'] : 1;
+        $uid = (int)$u['id'];
 
         ex("INSERT INTO sync_log (uuid, user_id, payload, captured_at, synced_at) VALUES (?, ?, ?, NOW(), NOW())",
             [$uuid, $uid, $raw]);
@@ -114,8 +116,8 @@ class ApiController {
     }
 
     public function location(): void {
-        $u = current_user();
-        if (!$u) json_response(['ok' => false], 401);
+        $u = require_login();
+        csrf_verify();
 
         $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
         $lat = (float)($data['lat'] ?? 0);
@@ -153,7 +155,7 @@ class UploadsController {
     public function serve(string $name): void {
         need('*', 'dashboard', 'crm', 'kyc', 'applications', 'loans', 'pregrt', 'employees');
         $u = current_user();
-        if ($u['role'] === 'customer') {
+        if (!$u || $u['role'] === 'customer') {
             http_response_code(403);
             die("Access Denied");
         }
@@ -164,6 +166,36 @@ class UploadsController {
         if (!file_exists($filePath)) {
             http_response_code(404);
             die("File not found");
+        }
+
+        // Branch-level tenant authorization check (AUD-011)
+        if (($u['role'] ?? '') !== 'admin') {
+            $fileBranch = null;
+
+            // 1. Direct query: Check kyc_forms joined with customers
+            $kycMatch = q("SELECT c.branch FROM kyc_forms k JOIN customers c ON k.customer_id=c.id " .
+                          "WHERE k.photo=? OR k.h_photo=? OR k.signed_copy=? OR k.docs_other=?",
+                          [$safeName, $safeName, $safeName, $safeName], true);
+            if ($kycMatch && !empty($kycMatch['branch'])) {
+                $fileBranch = $kycMatch['branch'];
+            }
+
+            // 2. Pattern fallback: Check filename prefix cust_{cid}_, spouse_{cid}_, dossier_{cid}_
+            if (!$fileBranch && preg_match('/^(?:cust|spouse|dossier)_(\d+)_/i', $safeName, $matches)) {
+                $cid = (int)$matches[1];
+                $cust = q("SELECT branch FROM customers WHERE id=?", [$cid], true);
+                if ($cust && !empty($cust['branch'])) {
+                    $fileBranch = $cust['branch'];
+                }
+            }
+
+            // 3. Verify access via assert_branch_access
+            if ($fileBranch !== null) {
+                assert_branch_access($fileBranch);
+            } else {
+                http_response_code(403);
+                die("Access Denied: Cross-branch or unverified file access prohibited.");
+            }
         }
 
         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));

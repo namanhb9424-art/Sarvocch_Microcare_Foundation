@@ -17,6 +17,9 @@ class PreGrtController {
         if ($u['role'] === 'field_agent') {
             $sql .= " AND p.agent_id = ?";
             $params[] = (int)$u['id'];
+        } elseif ($u['role'] !== 'admin') {
+            $sql .= " AND p.branch = ?";
+            $params[] = $u['branch'] ?? '';
         } elseif (!empty($_GET['branch'])) {
             $sql .= " AND p.branch = ?";
             $params[] = $_GET['branch'];
@@ -38,7 +41,7 @@ class PreGrtController {
         need('pregrt');
         $u = current_user();
 
-        $branch = $_POST['branch'] ?? ($u['branch'] ?? 'Pipariya Branch');
+        $branch = ($u['role'] !== 'admin') ? ($u['branch'] ?? 'Pipariya Branch') : ($_POST['branch'] ?? ($u['branch'] ?? 'Pipariya Branch'));
         $centerNo = trim($_POST['center_no'] ?? '');
         $groupNo = trim($_POST['group_no'] ?? '');
         $village = trim($_POST['village'] ?? '');
@@ -68,6 +71,7 @@ class PreGrtController {
             flash("Pre-GRT group record not found.", "danger");
             redirect(url('/pregrt'));
         }
+        assert_branch_access($group['branch']);
         $members = q("SELECT * FROM pregrt_members WHERE pregrt_id=? ORDER BY sno ASC", [$pid]);
 
         view('pregrt/form', [
@@ -79,6 +83,13 @@ class PreGrtController {
     public function update(int $pid): void {
         csrf_verify();
         need('pregrt');
+
+        $group = q("SELECT branch FROM pregrt WHERE id=?", [$pid], true);
+        if (!$group) {
+            flash("Pre-GRT group record not found.", "danger");
+            redirect(url('/pregrt'));
+        }
+        assert_branch_access($group['branch']);
 
         $action = $_POST['action'] ?? 'save_members';
 
@@ -113,6 +124,13 @@ class PreGrtController {
         need('manager', 'underwriter', 'admin');
         $u = current_user();
 
+        $group = q("SELECT branch FROM pregrt WHERE id=?", [$pid], true);
+        if (!$group) {
+            flash("Pre-GRT group record not found.", "danger");
+            redirect(url('/pregrt'));
+        }
+        assert_branch_access($group['branch']);
+
         $decision = $_POST['decision'] ?? 'verified';
         $remarks = trim($_POST['review_remarks'] ?? '');
 
@@ -126,6 +144,10 @@ class PreGrtController {
     public function printDoc(int $pid): void {
         need('pregrt');
         $group = q("SELECT * FROM pregrt WHERE id=?", [$pid], true);
+        if (!$group) {
+            die("Pre-GRT group not found");
+        }
+        assert_branch_access($group['branch']);
         $members = q("SELECT * FROM pregrt_members WHERE pregrt_id=? ORDER BY sno ASC", [$pid]);
 
         view('pregrt/print', [
@@ -138,6 +160,11 @@ class PreGrtController {
     public function groupApplyForm(int $pid): void {
         need('apply');
         $group = q("SELECT * FROM pregrt WHERE id=?", [$pid], true);
+        if (!$group) {
+            flash("Pre-GRT group record not found.", "danger");
+            redirect(url('/pregrt'));
+        }
+        assert_branch_access($group['branch']);
         $members = q("SELECT * FROM pregrt_members WHERE pregrt_id=? ORDER BY sno ASC", [$pid]);
         $products = q("SELECT * FROM products WHERE active=1 ORDER BY id");
 
@@ -154,6 +181,11 @@ class PreGrtController {
         $u = current_user();
 
         $group = q("SELECT * FROM pregrt WHERE id=?", [$pid], true);
+        if (!$group) {
+            flash("Pre-GRT group record not found.", "danger");
+            redirect(url('/pregrt'));
+        }
+        assert_branch_access($group['branch']);
         $members = q("SELECT * FROM pregrt_members WHERE pregrt_id=? ORDER BY sno ASC", [$pid]);
         $productId = (int)($_POST['product_id'] ?? 1);
         $p = q("SELECT * FROM products WHERE id=?", [$productId], true);
