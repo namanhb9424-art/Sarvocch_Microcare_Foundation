@@ -120,11 +120,9 @@ Router::add('GET',  '/loans/:lid/card',          'LoanController', 'card');
 Router::add('GET',  '/loans/:lid/noc.pdf',       'LoanController', 'nocPdf');
 Router::add('GET',  '/loans/:lid/settle',        'LoanController', 'settleForm');
 Router::add('POST', '/loans/:lid/settle',        'LoanController', 'settlePost');
-Router::add('POST', '/loans/:lid/autopay',       'LoanController', 'autopay');
 Router::add('GET',  '/portal',                   'LoanController', 'portal');
 Router::add('GET',  '/pay/:lid',                 'LoanController', 'payForm');
 Router::add('POST', '/pay/:lid',                 'LoanController', 'payPost');
-Router::add('POST', '/autopay/run',              'LoanController', 'runAutopay');
 
 // Pre-GRT Group Assessment
 Router::add('GET',  '/pregrt',               'PreGrtController', 'list');
@@ -144,7 +142,7 @@ Router::add('GET',  '/reports/pdf',         'ReportsController', 'exportPdf');
 // Field Operations
 Router::add('GET',  '/field',                   'FieldController', 'index');
 Router::add('POST', '/field/assign',            'FieldController', 'assign');
-Router::add('POST', '/field/attendance',        'FieldController', 'attendance');
+Router::add('POST', '/field/attendance',        'AttendanceController', 'punch');
 Router::add('POST', '/field/task/:tid/done',    'FieldController', 'taskDone');
 
 // Attendance

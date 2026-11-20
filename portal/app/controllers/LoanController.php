@@ -110,22 +110,41 @@ class LoanController {
         $channel = $_POST['channel'] ?? 'CASH';
         $ref = trim($_POST['ref'] ?? '');
 
-        $quote = Finance::settlementQuote($lid);
-        if (!$quote) {
-            flash("No outstanding balance on this loan.", "warning");
+        Database::beginTransaction();
+        try {
+            $isSqlite = Database::getConnection()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+            $loan = q("SELECT * FROM loans WHERE id=?" . ($isSqlite ? "" : " FOR UPDATE"), [$lid], true);
+            if (!$loan || $loan['status'] === 'closed') {
+                Database::rollBack();
+                flash("Loan is already closed or invalid.", "warning");
+                redirect(url('/loans/' . $lid));
+            }
+
+            $quote = Finance::settlementQuote($lid);
+            if (!$quote) {
+                Database::rollBack();
+                flash("No outstanding balance on this loan.", "warning");
+                redirect(url('/loans/' . $lid));
+            }
+
+            // Mark all remaining schedule entries as paid
+            $today = date('Y-m-d');
+            ex("UPDATE schedule SET paid=1, paid_on=? WHERE loan_id=? AND paid=0", [$today, $lid]);
+            ex("INSERT INTO payments (loan_id, amount, channel, ref, at) VALUES (?, ?, ?, ?, NOW())",
+                [$lid, $quote['total'], $channel, $ref ?: 'SETTLE' . strtoupper(bin2hex(random_bytes(4)))]);
+
+            ex("UPDATE loans SET status='closed', closure_date=? WHERE id=?", [$today, $lid]);
+            Database::commit();
+
+            flash("Loan #" . $lid . " has been fully settled and closed. NOC will be available after 15 days.", "success");
+            redirect(url('/loans/' . $lid));
+        } catch (Exception $e) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            flash("Settlement transaction failed: " . $e->getMessage(), "danger");
             redirect(url('/loans/' . $lid));
         }
-
-        // Mark all remaining schedule entries as paid
-        $today = date('Y-m-d');
-        ex("UPDATE schedule SET paid=1, paid_on=? WHERE loan_id=? AND paid=0", [$today, $lid]);
-        ex("INSERT INTO payments (loan_id, amount, channel, ref, at) VALUES (?, ?, ?, ?, NOW())",
-            [$lid, $quote['total'], $channel, $ref ?: 'SETTLE' . strtoupper(bin2hex(random_bytes(4)))]);
-
-        ex("UPDATE loans SET status='closed', closure_date=? WHERE id=?", [$today, $lid]);
-
-        flash("Loan #" . $lid . " has been fully settled and closed. NOC will be available after 15 days.", "success");
-        redirect(url('/loans/' . $lid));
     }
 
     public function payForm(int $lid): void {
@@ -172,20 +191,8 @@ class LoanController {
     }
 
     public function runAutopay(): void {
-        csrf_verify();
-        need('admin', 'manager');
-
-        // Autopay batch execution on due loans
-        $today = date('Y-m-d');
-        $dueSchedules = q("SELECT s.*, l.id as lid FROM schedule s JOIN loans l ON s.loan_id=l.id WHERE s.paid=0 AND s.due_date <= ? AND l.status='active' LIMIT 50", [$today]);
-
-        $collected = 0;
-        foreach ($dueSchedules as $s) {
-            Finance::recordPayment((int)$s['lid'], (int)$s['id'], 'eNACH', 'AUTOPAY' . rand(10000, 99999));
-            $collected++;
-        }
-
-        flash("Automated eNACH collection cycle completed: " . $collected . " instalments processed.", "success");
+        http_response_code(501);
+        flash("Automated eNACH clearing is disabled until NPCI payment gateway integration is live.", "danger");
         redirect(url('/loans'));
     }
 }

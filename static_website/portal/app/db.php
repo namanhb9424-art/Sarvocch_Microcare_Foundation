@@ -141,6 +141,40 @@ class Database {
         }
         return self::$configCache;
     }
+
+    public static function beginTransaction(): bool {
+        $db = self::getConnection();
+        return $db->inTransaction() ? true : $db->beginTransaction();
+    }
+
+    public static function commit(): bool {
+        $db = self::getConnection();
+        return $db->inTransaction() ? $db->commit() : true;
+    }
+
+    public static function rollBack(): bool {
+        $db = self::getConnection();
+        return $db->inTransaction() ? $db->rollBack() : true;
+    }
+
+    public static function inTransaction(): bool {
+        return self::getConnection()->inTransaction();
+    }
+}
+
+/**
+ * Transaction helper wrappers
+ */
+function db_begin(): bool {
+    return Database::beginTransaction();
+}
+
+function db_commit(): bool {
+    return Database::commit();
+}
+
+function db_rollback(): bool {
+    return Database::rollBack();
 }
 
 /**

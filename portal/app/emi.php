@@ -86,52 +86,87 @@ class Finance {
     }
 
     public static function createLoan(int $appId, ?DateTime $start = null): int {
-        $a = q("SELECT * FROM applications WHERE id=?", [$appId], true);
-        if (!$a) throw new Exception("Application not found");
-        $p = q("SELECT * FROM products WHERE id=?", [$a['product_id']], true);
-        if (!$p) throw new Exception("Product not found");
-
-        $start = $start ?? new DateTime();
-        [$emi, $rows] = self::buildSchedule((float)$a['amount'], (float)$a['rate'], (int)$a['tenure'], $start, $p['method']);
-
-        $lid = ex(
-            "INSERT INTO loans(application_id, customer_id, product_id, principal, rate, tenure, method, emi, start_date, status, branch, agent_id) " .
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-            [
-                $appId, $a['customer_id'], $a['product_id'], $a['amount'], $a['rate'],
-                $a['tenure'], $p['method'], $emi, $start->format('Y-m-d'),
-                $a['branch'], $a['agent_id']
-            ]
-        );
-
-        foreach ($rows as $r) {
-            ex(
-                "INSERT INTO schedule(loan_id, no, due_date, emi, principal, interest, balance) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [$lid, $r['no'], $r['due_date'], $r['emi'], $r['principal'], $r['interest'], $r['balance']]
-            );
+        $startedTx = !Database::inTransaction();
+        if ($startedTx) {
+            Database::beginTransaction();
         }
+        try {
+            $a = q("SELECT * FROM applications WHERE id=?", [$appId], true);
+            if (!$a) throw new Exception("Application not found");
+            $p = q("SELECT * FROM products WHERE id=?", [$a['product_id']], true);
+            if (!$p) throw new Exception("Product not found");
 
-        return $lid;
+            $start = $start ?? new DateTime();
+            [$emi, $rows] = self::buildSchedule((float)$a['amount'], (float)$a['rate'], (int)$a['tenure'], $start, $p['method']);
+
+            $lid = ex(
+                "INSERT INTO loans(application_id, customer_id, product_id, principal, rate, tenure, method, emi, start_date, status, branch, agent_id) " .
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+                [
+                    $appId, $a['customer_id'], $a['product_id'], $a['amount'], $a['rate'],
+                    $a['tenure'], $p['method'], $emi, $start->format('Y-m-d'),
+                    $a['branch'], $a['agent_id']
+                ]
+            );
+
+            foreach ($rows as $r) {
+                ex(
+                    "INSERT INTO schedule(loan_id, no, due_date, emi, principal, interest, balance) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [$lid, $r['no'], $r['due_date'], $r['emi'], $r['principal'], $r['interest'], $r['balance']]
+                );
+            }
+
+            if ($startedTx) {
+                Database::commit();
+            }
+            return $lid;
+        } catch (Exception $e) {
+            if ($startedTx && Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $e;
+        }
     }
 
     public static function recordPayment(int $loanId, int $schedId, string $channel, ?string $ref = null, ?string $at = null): ?string {
-        $s = q("SELECT * FROM schedule WHERE id=? AND loan_id=?", [$schedId, $loanId], true);
-        if (!$s || $s['paid']) return null;
-
-        $at = $at ?? date('Y-m-d H:i:s');
-        $dateOnly = substr($at, 0, 10);
-        $ref = $ref ?: strtoupper(substr($channel, 0, 3)) . strtoupper(bin2hex(random_bytes(5)));
-
-        ex("UPDATE schedule SET paid=1, paid_on=? WHERE id=?", [$dateOnly, $schedId]);
-        ex("INSERT INTO payments(loan_id, schedule_id, amount, channel, ref, at) VALUES (?, ?, ?, ?, ?, ?)",
-            [$loanId, $schedId, $s['emi'], $channel, $ref, $at]);
-
-        $leftRow = q("SELECT COUNT(*) as c FROM schedule WHERE loan_id=? AND paid=0", [$loanId], true);
-        if ((int)($leftRow['c'] ?? 0) === 0) {
-            ex("UPDATE loans SET status='closed', closure_date=? WHERE id=?", [$dateOnly, $loanId]);
+        $startedTx = !Database::inTransaction();
+        if ($startedTx) {
+            Database::beginTransaction();
         }
+        try {
+            $isSqlite = Database::getConnection()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+            $lockSql = "SELECT * FROM schedule WHERE id=? AND loan_id=?" . ($isSqlite ? "" : " FOR UPDATE");
+            $s = q($lockSql, [$schedId, $loanId], true);
+            if (!$s || (int)$s['paid'] === 1) {
+                if ($startedTx && Database::inTransaction()) {
+                    Database::rollBack();
+                }
+                return null;
+            }
 
-        return $ref;
+            $at = $at ?? date('Y-m-d H:i:s');
+            $dateOnly = substr($at, 0, 10);
+            $ref = $ref ?: strtoupper(substr($channel, 0, 3)) . strtoupper(bin2hex(random_bytes(5)));
+
+            ex("UPDATE schedule SET paid=1, paid_on=? WHERE id=?", [$dateOnly, $schedId]);
+            ex("INSERT INTO payments(loan_id, schedule_id, amount, channel, ref, at) VALUES (?, ?, ?, ?, ?, ?)",
+                [$loanId, $schedId, $s['emi'], $channel, $ref, $at]);
+
+            $leftRow = q("SELECT COUNT(*) as c FROM schedule WHERE loan_id=? AND paid=0", [$loanId], true);
+            if ((int)($leftRow['c'] ?? 0) === 0) {
+                ex("UPDATE loans SET status='closed', closure_date=? WHERE id=?", [$dateOnly, $loanId]);
+            }
+
+            if ($startedTx) {
+                Database::commit();
+            }
+            return $ref;
+        } catch (Exception $e) {
+            if ($startedTx && Database::inTransaction()) {
+                Database::rollBack();
+            }
+            throw $e;
+        }
     }
 
     public static function feeSplit(float $amount, float $feePct, ?float $gstRate = null): array {

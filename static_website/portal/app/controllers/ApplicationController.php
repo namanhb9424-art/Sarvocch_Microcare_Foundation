@@ -105,12 +105,22 @@ class ApplicationController {
                 flash("Application must be in approved status before disbursement.", "danger");
                 redirect(url('/applications/' . $aid));
             }
-            $lid = Finance::createLoan($aid);
-            ex("UPDATE applications SET status='disbursed' WHERE id=?", [$aid]);
-            ex("INSERT INTO approvals (application_id, stage, by_user, by_role, amount, remarks, at) VALUES (?, 'Disbursed', ?, ?, ?, ?, NOW())",
-                [$aid, $u['name'], $u['role'], $app['amount'], $remarks ?: 'Loan disbursed into customer account']);
-            flash("Loan #" . $lid . " created and disbursed successfully!", "success");
-            redirect(url('/loans/' . $lid));
+            Database::beginTransaction();
+            try {
+                $lid = Finance::createLoan($aid);
+                ex("UPDATE applications SET status='disbursed' WHERE id=?", [$aid]);
+                ex("INSERT INTO approvals (application_id, stage, by_user, by_role, amount, remarks, at) VALUES (?, 'Disbursed', ?, ?, ?, ?, NOW())",
+                    [$aid, $u['name'], $u['role'], $app['amount'], $remarks ?: 'Loan disbursed into customer account']);
+                Database::commit();
+                flash("Loan #" . $lid . " created and disbursed successfully!", "success");
+                redirect(url('/loans/' . $lid));
+            } catch (Exception $e) {
+                if (Database::inTransaction()) {
+                    Database::rollBack();
+                }
+                flash("Disbursement failed: " . $e->getMessage(), "danger");
+                redirect(url('/applications/' . $aid));
+            }
         }
 
         redirect(url('/applications/' . $aid));
