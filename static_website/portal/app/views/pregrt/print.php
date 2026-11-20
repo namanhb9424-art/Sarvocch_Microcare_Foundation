@@ -53,7 +53,7 @@
           <td class="fw-bold"><?= htmlspecialchars($m['name']) ?></td>
           <td><?= htmlspecialchars($m['husband_name']) ?></td>
           <td class="text-center"><?= $m['age'] ?></td>
-          <td class="text-center">•••• <?= $m['aadhaar4'] ?: '0000' ?></td>
+          <td class="text-center">XXXX-XXXX-<?= htmlspecialchars($m['aadhaar4'] ?: '0000') ?></td>
           <td class="text-end"><?= inr($m['annual_income']) ?></td>
           <td class="text-end fw-bold"><?= inr($m['loan_amount']) ?></td>
           <td><?= htmlspecialchars($m['purpose']) ?></td>

@@ -30,7 +30,7 @@
         <div class="mb-2"><strong>Mobile:</strong> <?= htmlspecialchars($c['phone'] ?: '-') ?></div>
         <div class="mb-2"><strong>Date of Birth:</strong> <?= fmt_date($c['dob']) ?></div>
         <div class="mb-2"><strong>Address:</strong> <?= htmlspecialchars($c['address'] ?: '-') ?></div>
-        <div class="mb-2"><strong>Aadhaar:</strong> <?= $c['aadhaar'] ? '•••• •••• ' . substr($c['aadhaar'], -4) : 'Pending' ?></div>
+        <div class="mb-2"><strong>Aadhaar:</strong> <?= !empty($c['aadhaar_last4']) ? 'XXXX-XXXX-' . htmlspecialchars($c['aadhaar_last4']) : 'Pending' ?></div>
         <div class="mb-2"><strong>PAN Card:</strong> <?= htmlspecialchars($c['pan'] ?: 'Pending') ?></div>
         <div class="mb-2"><strong>KYC Status:</strong> <span class="badge bg-<?= ($c['kyc_status'] === 'verified') ? 'success' : 'warning text-dark' ?>"><?= ucfirst($c['kyc_status']) ?></span></div>
         <div class="mb-3"><strong>Assigned Officer:</strong> <?= htmlspecialchars($c['agent_name'] ?: 'Unassigned') ?></div>

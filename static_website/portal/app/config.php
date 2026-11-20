@@ -63,6 +63,7 @@ if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') ?: ''); // Set your
 // 3. Security & Application Secrets
 // --------------------------------------------------------------------------
 define('SECRET_KEY', getenv('SECRET_KEY') ?: 'sarvoocch_prod_secure_token_key_2026_9111199101');
+define('AADHAAR_HMAC_KEY', getenv('AADHAAR_HMAC_KEY') ?: 'sarvoocch_aadhaar_hmac_secret_key_2026_salt');
 define('APP_DEBUG', (getenv('APP_DEBUG') === '1' || getenv('FLASK_DEBUG') === '1'));
 define('DISABLE_DEMO_LOGINS', getenv('DISABLE_DEMO_LOGINS') === '1' || !APP_DEBUG);
 

@@ -98,7 +98,7 @@
                   <td class="fw-semibold"><?= htmlspecialchars($m['name']) ?></td>
                   <td><?= htmlspecialchars($m['husband_name'] ?: '-') ?></td>
                   <td><?= $m['age'] ?> yrs</td>
-                  <td>•••• <?= $m['aadhaar4'] ?: '0000' ?></td>
+                  <td>XXXX-XXXX-<?= htmlspecialchars($m['aadhaar4'] ?: '0000') ?></td>
                   <td class="text-end fw-bold text-teal"><?= inr($m['loan_amount']) ?></td>
                   <td><?= htmlspecialchars($m['purpose'] ?: 'Dairy') ?></td>
                 </tr>

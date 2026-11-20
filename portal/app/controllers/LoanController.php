@@ -91,7 +91,7 @@ class LoanController {
 
     public function nocPdf(int $lid): void {
         need('loans');
-        $loan = q("SELECT l.*, c.name as customer_name, c.phone, c.address, c.aadhaar, p.name as product_name " .
+        $loan = q("SELECT l.*, c.name as customer_name, c.phone, c.address, c.aadhaar_last4, p.name as product_name " .
                   "FROM loans l JOIN customers c ON l.customer_id=c.id JOIN products p ON l.product_id=p.id WHERE l.id=?", [$lid], true);
 
         if (!$loan || $loan['status'] !== 'closed') {

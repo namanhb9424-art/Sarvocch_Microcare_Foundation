@@ -40,10 +40,19 @@ class CrmController {
             $params[] = $agentId;
         }
         if (!empty($qSearch)) {
-            $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.aadhaar LIKE ?)";
-            $params[] = "%$qSearch%";
-            $params[] = "%$qSearch%";
-            $params[] = "%$qSearch%";
+            $digitsSearch = preg_replace('/\D/', '', $qSearch);
+            if (strlen($digitsSearch) === 12) {
+                $searchHash = hash_hmac('sha256', $digitsSearch, AADHAAR_HMAC_KEY);
+                $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.aadhaar_hash = ?)";
+                $params[] = "%$qSearch%";
+                $params[] = "%$qSearch%";
+                $params[] = $searchHash;
+            } else {
+                $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.aadhaar_last4 LIKE ?)";
+                $params[] = "%$qSearch%";
+                $params[] = "%$qSearch%";
+                $params[] = "%$qSearch%";
+            }
         }
 
         $sql .= " ORDER BY c.id DESC LIMIT 100";

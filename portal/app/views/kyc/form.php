@@ -33,7 +33,8 @@
 
         <div class="col-12 col-md-4">
           <label class="form-label small fw-semibold">Aadhaar Number / आधार नंबर (12 Digits)</label>
-          <input type="text" name="aadhaar" class="form-control" maxlength="12" placeholder="123456789012" value="<?= htmlspecialchars($c['aadhaar'] ?? '') ?>">
+          <input type="text" name="aadhaar" class="form-control" maxlength="14" placeholder="<?= !empty($c['aadhaar_last4']) ? 'XXXX-XXXX-' . htmlspecialchars($c['aadhaar_last4']) : '123456789012' ?>" value="<?= !empty($c['aadhaar_last4']) ? 'XXXX-XXXX-' . htmlspecialchars($c['aadhaar_last4']) : '' ?>">
+          <small class="text-muted" style="font-size:0.75rem;">UIDAI Masked: Stored as last-4 &amp; cryptographic hash</small>
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label small fw-semibold">PAN Card / पैन नंबर</label>

@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS `customers` (
   `branch` VARCHAR(100) DEFAULT NULL,
   `agent_id` INT UNSIGNED DEFAULT NULL,
   `stage` VARCHAR(50) DEFAULT 'lead',
-  `aadhaar` VARCHAR(12) DEFAULT NULL,
+  `aadhaar_last4` VARCHAR(4) DEFAULT NULL,
+  `aadhaar_hash` CHAR(64) DEFAULT NULL,
   `pan` VARCHAR(10) DEFAULT NULL,
   `voter` VARCHAR(20) DEFAULT NULL,
   `kyc_status` ENUM('pending','verified','rejected') DEFAULT 'pending',
@@ -68,7 +69,8 @@ CREATE TABLE IF NOT EXISTS `customers` (
   INDEX `idx_customers_branch` (`branch`),
   INDEX `idx_customers_agent` (`agent_id`),
   INDEX `idx_customers_phone` (`phone`),
-  INDEX `idx_customers_stage` (`stage`)
+  INDEX `idx_customers_stage` (`stage`),
+  INDEX `idx_customers_aadhaar_hash` (`aadhaar_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Communication Logs

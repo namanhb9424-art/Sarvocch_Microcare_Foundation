@@ -57,7 +57,7 @@
           <tr>
             <td class="fw-semibold"><?= htmlspecialchars($c['name']) ?></td>
             <td><?= htmlspecialchars($c['phone'] ?: '-') ?></td>
-            <td><?= $c['aadhaar'] ? '•••• ' . substr($c['aadhaar'], -4) : '<span class="text-muted">Missing</span>' ?></td>
+            <td><?= !empty($c['aadhaar_last4']) ? 'XXXX-XXXX-' . htmlspecialchars($c['aadhaar_last4']) : '<span class="text-muted">Missing</span>' ?></td>
             <td><?= htmlspecialchars($c['pan'] ?: '-') ?></td>
             <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($c['branch'] ?: '-') ?></span></td>
             <td>

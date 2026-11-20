@@ -40,7 +40,7 @@
   <p>
     This is to certify that <strong>Mrs. <?= htmlspecialchars($l['customer_name']) ?></strong>, 
     residing at <strong><?= htmlspecialchars($l['address'] ?: 'Customer Address') ?></strong>, 
-    having Aadhaar ending in <strong>•••• <?= substr($l['aadhaar'] ?? '0000', -4) ?></strong>, 
+    having Aadhaar ending in <strong>XXXX-XXXX-<?= htmlspecialchars($l['aadhaar_last4'] ?? '0000') ?></strong>, 
     had availed a microfinance credit facility bearing <strong>Loan Account No: #<?= $l['id'] ?></strong> 
     under our scheme <strong><?= htmlspecialchars($l['product_name']) ?></strong> from our 
     <strong><?= htmlspecialchars($l['branch']) ?></strong> branch.

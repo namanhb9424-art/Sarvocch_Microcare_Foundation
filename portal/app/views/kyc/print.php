@@ -39,7 +39,7 @@
       <table class="table table-bordered table-sm mb-0">
         <tr><td class="lbl">Borrower Name</td><td><?= htmlspecialchars($c['name']) ?></td><td class="lbl">Date of Birth</td><td><?= fmt_date($c['dob']) ?></td></tr>
         <tr><td class="lbl">Mobile Number</td><td><?= htmlspecialchars($c['phone']) ?></td><td class="lbl">Marital Status</td><td>Married</td></tr>
-        <tr><td class="lbl">Aadhaar (Last 4)</td><td>•••• •••• <?= substr($c['aadhaar'] ?? '0000', -4) ?></td><td class="lbl">PAN Card</td><td><?= htmlspecialchars($c['pan'] ?: '-') ?></td></tr>
+        <tr><td class="lbl">Aadhaar (Last 4)</td><td>XXXX-XXXX-<?= htmlspecialchars($c['aadhaar_last4'] ?? '0000') ?></td><td class="lbl">PAN Card</td><td><?= htmlspecialchars($c['pan'] ?: '-') ?></td></tr>
         <tr><td class="lbl">Center & Group</td><td>Center <?= htmlspecialchars($k['center_no'] ?? '-') ?> / Group <?= htmlspecialchars($k['group_no'] ?? '-') ?></td><td class="lbl">Category</td><td><?= htmlspecialchars($k['category'] ?? 'General') ?></td></tr>
         <tr><td class="lbl">Guardian Name</td><td><?= htmlspecialchars($k['guardian_name'] ?? '-') ?> (<?= htmlspecialchars($k['guardian_type'] ?? 'Husband') ?>)</td><td class="lbl">Education</td><td><?= htmlspecialchars($k['education'] ?? '-') ?></td></tr>
       </table>

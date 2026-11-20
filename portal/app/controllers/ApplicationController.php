@@ -49,7 +49,7 @@ class ApplicationController {
     public function detail(int $aid): void {
         need('applications');
         $app = q("SELECT a.*, c.name as customer_name, c.phone as customer_phone, c.dob as customer_dob, " .
-                 "c.address as customer_address, c.aadhaar, c.pan, p.name as product_name, p.method as product_method " .
+                 "c.address as customer_address, c.aadhaar_last4, c.pan, p.name as product_name, p.method as product_method " .
                  "FROM applications a " .
                  "JOIN customers c ON a.customer_id=c.id " .
                  "JOIN products p ON a.product_id=p.id WHERE a.id=?", [$aid], true);

@@ -140,14 +140,47 @@ class KycController {
         $coRelation = $_POST['co_relation'] ?? '';
         $coIncome = (float)($_POST['co_income'] ?? 0);
 
-        // Update core customer row
-        $aadhaar = preg_replace('/\s+/', '', $_POST['aadhaar'] ?? '');
+        // Process Aadhaar input: Validate via Verhoeff checksum and derive last4 + HMAC hash
+        $rawAadhaar = preg_replace('/\D/', '', $_POST['aadhaar'] ?? '');
+        $aadhaarLast4 = null;
+        $aadhaarHash = null;
+
+        if (!empty($rawAadhaar)) {
+            if (strlen($rawAadhaar) === 12) {
+                if (validate_id('aadhaar', $rawAadhaar)) {
+                    $aadhaarLast4 = substr($rawAadhaar, -4);
+                    $aadhaarHash = hash_hmac('sha256', $rawAadhaar, AADHAAR_HMAC_KEY);
+                } else {
+                    flash("Aadhaar checksum validation failed (invalid Verhoeff check digit).", "warning");
+                    $aadhaarLast4 = substr($rawAadhaar, -4);
+                }
+            } elseif (strlen($rawAadhaar) === 4) {
+                $aadhaarLast4 = $rawAadhaar;
+            }
+        }
+
+        // If not updating Aadhaar, preserve existing redacted values
+        $existingCust = q("SELECT aadhaar_last4, aadhaar_hash FROM customers WHERE id=?", [$cid], true);
+        if ($aadhaarLast4 === null && $existingCust) {
+            $aadhaarLast4 = $existingCust['aadhaar_last4'];
+            $aadhaarHash = $existingCust['aadhaar_hash'];
+        }
+
+        // Deterministic deduplication check via HMAC hash
+        if ($aadhaarHash !== null) {
+            $duplicate = q("SELECT id, name FROM customers WHERE aadhaar_hash=? AND id != ?", [$aadhaarHash, $cid], true);
+            if ($duplicate) {
+                flash("Duplicate Aadhaar: Already registered to customer #" . $duplicate['id'] . " (" . htmlspecialchars($duplicate['name']) . ").", "warning");
+            }
+        }
+
+        // Update core customer row with redacted last4 and HMAC hash (NEVER raw 12 digits)
         $pan = strtoupper(trim($_POST['pan'] ?? ''));
         $voter = strtoupper(trim($_POST['voter'] ?? ''));
         $dob = $_POST['dob'] ?: null;
 
-        ex("UPDATE customers SET name=?, phone=?, dob=?, address=?, branch=?, aadhaar=?, pan=?, voter=? WHERE id=?",
-            [$name, $phone, $dob, $village . ', ' . $district, $branch, $aadhaar ?: null, $pan ?: null, $voter ?: null, $cid]);
+        ex("UPDATE customers SET name=?, phone=?, dob=?, address=?, branch=?, aadhaar_last4=?, aadhaar_hash=?, pan=?, voter=? WHERE id=?",
+            [$name, $phone, $dob, $village . ', ' . $district, $branch, $aadhaarLast4, $aadhaarHash, $pan ?: null, $voter ?: null, $cid]);
 
         // Insert or Update kyc_forms
         $existing = q("SELECT id, photo, h_photo, signed_copy FROM kyc_forms WHERE customer_id=?", [$cid], true);
