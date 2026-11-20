@@ -1,7 +1,7 @@
 <?php
 /**
  * SARVOOCCH Microcare Foundation - Database Layer
- * PDO with MySQL (Production) & SQLite (Fallback/Testing)
+ * PDO with MySQL (Production) & SQLite (Embedded Fallback/Zero-Config)
  * Provides q() and ex() helpers matching the Python codebase.
  */
 
@@ -17,19 +17,45 @@ class Database {
             return self::$instance;
         }
 
+        $sqlitePath = STORAGE_PATH . '/sarvocch.db';
+
         try {
-            // Attempt MySQL connection first
-            $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
-            $options = [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-            ];
-            self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
+            // Attempt MySQL connection if credentials are configured
+            if (!empty(DB_PASS) || getenv('FORCE_MYSQL') === '1') {
+                $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
+                $options = [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+                ];
+                self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
+            } elseif (file_exists($sqlitePath)) {
+                // If MySQL password is not yet configured, use pre-seeded SQLite immediately
+                $options = [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                ];
+                self::$instance = new PDO('sqlite:' . $sqlitePath, null, null, $options);
+                self::$instance->exec("PRAGMA journal_mode=WAL;");
+                self::$instance->exec("PRAGMA foreign_keys=ON;");
+                self::$instance->exec("PRAGMA busy_timeout=5000;");
+                if (method_exists(self::$instance, 'sqliteCreateFunction')) {
+                    self::$instance->sqliteCreateFunction('NOW', fn() => date('Y-m-d H:i:s'));
+                    self::$instance->sqliteCreateFunction('CURDATE', fn() => date('Y-m-d'));
+                }
+                return self::$instance;
+            } else {
+                // Try MySQL anyway if SQLite database does not exist
+                $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
+                $options = [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                ];
+                self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
+            }
         } catch (PDOException $e) {
-            // If MySQL is not configured or offline in local dev, check for SQLite fallback
-            $sqlitePath = STORAGE_PATH . '/sarvocch.db';
+            // Fallback to SQLite if MySQL fails
             if (file_exists($sqlitePath) || getenv('USE_SQLITE') === '1') {
                 $options = [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -39,9 +65,18 @@ class Database {
                 self::$instance->exec("PRAGMA journal_mode=WAL;");
                 self::$instance->exec("PRAGMA foreign_keys=ON;");
                 self::$instance->exec("PRAGMA busy_timeout=5000;");
+                if (method_exists(self::$instance, 'sqliteCreateFunction')) {
+                    self::$instance->sqliteCreateFunction('NOW', fn() => date('Y-m-d H:i:s'));
+                    self::$instance->sqliteCreateFunction('CURDATE', fn() => date('Y-m-d'));
+                }
             } else {
                 throw new Exception("Database Connection Failed: " . $e->getMessage() . " [Host: " . DB_HOST . ", Database: " . DB_NAME . ", User: " . DB_USER . "]");
             }
+        }
+
+        if (self::$instance->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' && method_exists(self::$instance, 'sqliteCreateFunction')) {
+            self::$instance->sqliteCreateFunction('NOW', fn() => date('Y-m-d H:i:s'));
+            self::$instance->sqliteCreateFunction('CURDATE', fn() => date('Y-m-d'));
         }
 
         return self::$instance;
