@@ -69,8 +69,8 @@ define('BASE_URI', $baseUri === '' ? '' : $baseUri);
 // --------------------------------------------------------------------------
 if (!defined('DB_HOST')) define('DB_HOST', $cfgGet('DB_HOST', 'localhost'));
 if (!defined('DB_PORT')) define('DB_PORT', (int)$cfgGet('DB_PORT', 3306));
-if (!defined('DB_NAME')) define('DB_NAME', $cfgGet('DB_NAME', 'u170129876_15wvs'));
-if (!defined('DB_USER')) define('DB_USER', $cfgGet('DB_USER', 'u170129876_7UJs1'));
+if (!defined('DB_NAME')) define('DB_NAME', $cfgGet('DB_NAME', 'u170129876_q1gD8'));
+if (!defined('DB_USER')) define('DB_USER', $cfgGet('DB_USER', 'u170129876_q1gD8'));
 if (!defined('DB_PASS')) define('DB_PASS', $cfgGet('DB_PASS', ''));
 
 // --------------------------------------------------------------------------

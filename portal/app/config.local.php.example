@@ -6,8 +6,8 @@
  */
 define('DB_HOST', 'localhost');
 define('DB_PORT', 3306);
-define('DB_NAME', 'u170129876_15wvs');
-define('DB_USER', 'u170129876_7UJs1');
+define('DB_NAME', 'u170129876_q1gD8');
+define('DB_USER', 'u170129876_q1gD8');
 define('DB_PASS', 'your_mysql_password_here');
 
 define('APP_KEY', '6a197d27dded78f63da64709d2b85574ce2a2d03f804783befc0488ef8243ecd');
