@@ -86,4 +86,44 @@
       </div>
     </div>
   </div>
+
+  <!-- Regulatory Compliance & Disaster Recovery -->
+  <div class="col-12 mt-4">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+          <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-shield-check me-2 text-teal"></i>Regulatory Data Safeguards & One-Click Backup</h6>
+          <small class="text-muted">Direct SQL Dump for RBI Inspection, Offsite Archival & Disaster Recovery</small>
+        </div>
+        <a href="<?= url('/settings/backup.sql') ?>" class="btn btn-teal text-white btn-sm px-3" style="background-color: #0f766e;">
+          <i class="bi bi-download me-1"></i> Download Database Backup (.sql)
+        </a>
+      </div>
+      <div class="card-body p-4 small">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="p-3 bg-light rounded border">
+              <div class="text-muted mb-1" style="font-size: 0.75rem;">HOSTINGER ENGINE</div>
+              <div class="fw-bold fs-6 text-dark"><?= strtoupper(Database::getConnection()->getAttribute(PDO::ATTR_DRIVER_NAME)) ?> Dual-Mode</div>
+              <div class="text-success mt-1" style="font-size: 0.75rem;"><i class="bi bi-check-circle-fill me-1"></i>Connection Healthy</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="p-3 bg-light rounded border">
+              <div class="text-muted mb-1" style="font-size: 0.75rem;">RBI AUDIT RETENTION</div>
+              <div class="fw-bold fs-6 text-dark">8 Years Statutory</div>
+              <div class="text-muted mt-1" style="font-size: 0.75rem;">Full payments & schedule audit trail</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="p-3 bg-light rounded border">
+              <div class="text-muted mb-1" style="font-size: 0.75rem;">SYSTEM SECURITY</div>
+              <div class="fw-bold fs-6 text-dark">Strict CSRF & Bcrypt</div>
+              <div class="text-muted mt-1" style="font-size: 0.75rem;">Bilingual KFS & NPCI Dynamic UPI</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>

@@ -97,11 +97,11 @@ define('PERMS', [
     'manager' => [
         'dashboard', 'crm', 'kyc', 'apply', 'applications', 'approve', 'disburse', 'loans',
         'payments', 'field', 'employees', 'hrm', 'whatsapp', 'sync', 'calculator', 'products',
-        'kycform', 'pregrt', 'attendance', 'reports'
+        'kycform', 'pregrt', 'attendance', 'reports', 'grievances'
     ],
     'underwriter' => [
         'dashboard', 'crm', 'kyc', 'applications', 'approve', 'loans', 'calculator',
-        'pregrt', 'attendance', 'reports'
+        'pregrt', 'attendance', 'reports', 'grievances'
     ],
     'field_agent' => [
         'crm', 'kyc', 'apply', 'applications', 'field', 'sync', 'calculator', 'whatsapp',
@@ -131,6 +131,7 @@ define('NAV', [
     ['hrm', 'HRM & Leave', 'hrm', 'briefcase'],
     ['attendance', 'Daily Attendance', 'attendance', 'clock-history'],
     ['reports', 'Reports & Compliance', 'reports', 'file-earmark-bar-graph'],
+    ['grievances', 'Grievance Redressal', 'grievances', 'shield-exclamation'],
     ['products', 'Loan Products', 'products', 'tags'],
     ['branches', 'Branches & Geo-Fence', 'branches', 'building'],
     ['holidays', 'Holiday Calendar', 'holidays', 'calendar3'],

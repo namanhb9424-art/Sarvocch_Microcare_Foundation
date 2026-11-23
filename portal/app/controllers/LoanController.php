@@ -224,8 +224,149 @@ class LoanController {
     }
 
     public function runAutopay(): void {
-        http_response_code(501);
-        flash("Automated eNACH clearing is disabled until NPCI payment gateway integration is live.", "danger");
+        need('payments', 'loans', 'dashboard');
+        $today = date('Y-m-d');
+
+        // Retrieve active mandates with installments due on or before today
+        $dueInstallments = q(
+            "SELECT s.id as schedule_id, s.loan_id, s.emi, s.due_date, m.bank, m.acct_last4, m.mtype, l.loan_no, c.name as customer_name " .
+            "FROM schedule s " .
+            "JOIN loans l ON s.loan_id = l.id " .
+            "JOIN mandates m ON m.loan_id = l.id " .
+            "JOIN customers c ON l.customer_id = c.id " .
+            "WHERE s.paid = 0 AND s.due_date <= ? AND l.status = 'active' AND m.status = 'active' " .
+            "ORDER BY s.due_date ASC",
+            [$today]
+        );
+
+        if (empty($dueInstallments)) {
+            flash("AutoPay Cycle: No pending dues for active eNACH mandates as of today ({$today}).", "info");
+            redirect(url('/loans'));
+            return;
+        }
+
+        $processed = 0;
+        $totalCollected = 0.0;
+        Database::beginTransaction();
+        try {
+            foreach ($dueInstallments as $item) {
+                $ref = 'NACH' . strtoupper(bin2hex(random_bytes(4))) . $item['schedule_id'];
+                $payRef = Finance::recordPayment((int)$item['loan_id'], (int)$item['schedule_id'], 'eNACH', $ref);
+                if ($payRef) {
+                    $processed++;
+                    $totalCollected += (float)$item['emi'];
+                }
+            }
+            Database::commit();
+            flash("AutoPay Batch Completed: Successfully processed {$processed} installments via eNACH clearing totaling " . inr($totalCollected) . ".", "success");
+        } catch (Exception $e) {
+            if (Database::inTransaction()) {
+                Database::rollBack();
+            }
+            flash("AutoPay Batch processing error: " . $e->getMessage(), "danger");
+        }
+
         redirect(url('/loans'));
     }
+
+    public function receiptPrint(int $lid, int $pid): void {
+        need('payments', 'loans');
+        $loan = q("SELECT l.*, c.name as customer_name, c.phone, c.address, p.name as product_name " .
+                 "FROM loans l JOIN customers c ON l.customer_id=c.id JOIN products p ON l.product_id=p.id WHERE l.id=?", [$lid], true);
+        if (!$loan) {
+            die("Loan not found");
+        }
+        assert_branch_access($loan['branch']);
+
+        $payment = q("SELECT * FROM payments WHERE id=? AND loan_id=?", [$pid, $lid], true);
+        if (!$payment) {
+            die("Payment receipt not found");
+        }
+
+        $schedule = q("SELECT * FROM schedule WHERE id=?", [$payment['schedule_id']], true);
+        $outstanding = q("SELECT COALESCE(SUM(balance),0) as bal FROM schedule WHERE loan_id=? AND paid=0", [$lid], true)['bal'] ?? 0;
+
+        view('loans/receipt_print', [
+            'l' => $loan,
+            'p' => $payment,
+            's' => $schedule,
+            'outstanding' => (float)$outstanding,
+            'noLayout' => true
+        ]);
+    }
+
+    public function upiQrJson(int $lid): void {
+        header('Content-Type: application/json; charset=utf-8');
+        $loan = q("SELECT l.*, c.name as customer_name, c.phone FROM loans l JOIN customers c ON l.customer_id=c.id WHERE l.id=?", [$lid], true);
+        if (!$loan) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'message' => 'Loan not found']);
+            exit;
+        }
+
+        $nextEmi = q("SELECT * FROM schedule WHERE loan_id=? AND paid=0 ORDER BY no ASC LIMIT 1", [$lid], true);
+        $amount = (float)($_GET['amount'] ?? ($nextEmi ? $nextEmi['emi'] : $loan['emi']));
+        $ref = 'SARV' . $lid . 'I' . ($nextEmi ? $nextEmi['no'] : '1');
+
+        $upiIntent = PaymentGatewayService::buildUpiIntent($amount, $ref, 'EMI ' . $loan['loan_no']);
+        $qrUrl = PaymentGatewayService::getQrCodeUrl($upiIntent, 300);
+
+        echo json_encode([
+            'ok' => true,
+            'loan_id' => $lid,
+            'loan_no' => $loan['loan_no'],
+            'borrower' => $loan['customer_name'],
+            'amount' => $amount,
+            'upi_intent' => $upiIntent,
+            'qr_url' => $qrUrl,
+            'ref' => $ref
+        ]);
+        exit;
+    }
+
+    public function kfsPdf(int $lid): void {
+        need('loans');
+        $loan = q("SELECT l.*, c.name as customer_name, c.phone, c.address, c.aadhaar_last4, c.pan, c.bank_account, c.bank_ifsc, p.name as product_name, p.fee_pct, p.method " .
+                  "FROM loans l JOIN customers c ON l.customer_id=c.id JOIN products p ON l.product_id=p.id WHERE l.id=?", [$lid], true);
+        if (!$loan) {
+            flash("Loan record not found.", "danger");
+            redirect(url('/loans'));
+        }
+        assert_branch_access($loan['branch']);
+
+        $schedule = q("SELECT * FROM schedule WHERE loan_id=? ORDER BY no ASC", [$lid]);
+
+        $principal = (float)$loan['principal'];
+        $feePct = (float)($loan['fee_pct'] ?? 1.50);
+        $procFee = round($principal * ($feePct / 100), 2);
+        $cgst = round($procFee * 0.09, 2);
+        $sgst = round($procFee * 0.09, 2);
+        $gstTotal = $cgst + $sgst;
+        $upfrontDeductions = $procFee + $gstTotal;
+        $netDisbursed = $principal - $upfrontDeductions;
+        $totalInterest = (float)array_sum(array_column($schedule, 'interest'));
+        $totalRepay = $principal + $totalInterest;
+        $totalCostOfCredit = $totalInterest + $upfrontDeductions;
+        $tenureYears = ((int)$loan['tenure']) / 12.0;
+        $apr = ($tenureYears > 0 && $netDisbursed > 0) ? round((($totalCostOfCredit / $netDisbursed) / $tenureYears) * 100, 2) : (float)$loan['rate'];
+
+        view('loans/kfs_print', [
+            'l' => $loan,
+            'schedule' => $schedule,
+            'principal' => $principal,
+            'feePct' => $feePct,
+            'procFee' => $procFee,
+            'cgst' => $cgst,
+            'sgst' => $sgst,
+            'gstTotal' => $gstTotal,
+            'upfrontDeductions' => $upfrontDeductions,
+            'netDisbursed' => $netDisbursed,
+            'totalInterest' => $totalInterest,
+            'totalRepay' => $totalRepay,
+            'totalCostOfCredit' => $totalCostOfCredit,
+            'apr' => $apr,
+            'noLayout' => true
+        ]);
+    }
 }
+

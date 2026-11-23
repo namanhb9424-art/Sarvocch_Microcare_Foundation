@@ -11,6 +11,7 @@
     <?php if ($l['status'] === 'closed'): ?>
       <a href="<?= url('/loans/' . $l['id'] . '/noc.pdf') ?>" target="_blank" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-check me-1"></i> Download NOC</a>
     <?php endif; ?>
+    <a href="<?= url('/loans/' . $l['id'] . '/kfs.pdf') ?>" target="_blank" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-text me-1"></i> RBI KFS</a>
     <a href="<?= url('/loans/' . $l['id'] . '/card') ?>" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i> Passbook Card</a>
   </div>
 </div>
@@ -51,9 +52,14 @@
       <div class="card-body p-3 small" style="max-height: 250px; overflow-y: auto;">
         <?php foreach ($payments as $p): ?>
           <div class="p-2 border-bottom">
-            <div class="d-flex justify-content-between">
-              <span class="fw-bold text-success"><?= inr($p['amount']) ?></span>
-              <span class="badge bg-light text-dark border"><?= $p['channel'] ?></span>
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <span class="fw-bold text-success"><?= inr($p['amount']) ?></span>
+                <span class="badge bg-light text-dark border ms-1"><?= $p['channel'] ?></span>
+              </div>
+              <a href="<?= url('/loans/' . $l['id'] . '/receipt/' . $p['id']) ?>" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 11px;">
+                <i class="bi bi-printer me-1"></i>Receipt
+              </a>
             </div>
             <div class="text-muted" style="font-size: 0.75rem;">Ref: <?= htmlspecialchars($p['ref'] ?: '-') ?> · <?= fmt_date($p['at']) ?></div>
           </div>

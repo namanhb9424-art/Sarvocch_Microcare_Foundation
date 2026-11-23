@@ -4,6 +4,9 @@
     <div class="text-muted small">SARVOOCCH Microcare Foundation · Regulated Section 8 MFI Operations</div>
   </div>
   <div class="mt-2 mt-md-0 d-flex gap-2">
+    <a href="<?= url('/reports/export-csv' . (!empty($selectedBranch) ? '?branch=' . urlencode($selectedBranch) : '')) ?>" class="btn btn-success fw-semibold">
+      <i class="bi bi-file-earmark-spreadsheet-fill me-1"></i> Export RBI Portfolio (CSV)
+    </a>
     <a href="<?= url('/reports/pdf') ?>" target="_blank" class="btn btn-danger fw-semibold">
       <i class="bi bi-file-earmark-pdf-fill me-1"></i> Download Official Letterhead Report (PDF)
     </a>

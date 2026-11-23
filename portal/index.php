@@ -87,7 +87,12 @@ foreach (glob(__DIR__ . '/app/controllers/*.php') as $controllerFile) {
 // 3. Router
 require_once __DIR__ . '/app/router.php';
 
-// 4. Initialize Secure Session
+// 4. Initialize Secure Session & Security Headers
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('X-XSS-Protection: 1; mode=block');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
 Auth::initSession();
 
 // 5. Dispatch Request

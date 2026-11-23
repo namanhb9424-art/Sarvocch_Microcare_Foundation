@@ -22,3 +22,7 @@
 # Secure Storage
 -keep class androidx.security.crypto.** { *; }
 
+# Google Play Core deferred components / split install (not using dynamic feature modules)
+-dontwarn com.google.android.play.core.**
+
+

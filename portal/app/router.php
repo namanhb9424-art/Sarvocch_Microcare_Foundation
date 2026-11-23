@@ -193,3 +193,28 @@ Router::add('GET',  '/api/nearby',        'ApiController', 'nearby');
 
 // Secure Authenticated Uploads
 Router::add('GET',  '/uploads/:name',     'UploadsController', 'serve');
+
+// Grievance Redressal (GRO Workflow)
+Router::add('GET',  '/grievances',             'GrievanceController', 'index');
+Router::add('GET',  '/grievances/:id',         'GrievanceController', 'detail');
+Router::add('POST', '/grievances/:id/update',  'GrievanceController', 'update');
+
+// Mobile Field Operations REST API (/api/v1/...)
+Router::add('POST', '/api/v1/auth/login',       'MobileApiController', 'login');
+Router::add('GET',  '/api/v1/field/tasks',      'MobileApiController', 'getTasks');
+Router::add('POST', '/api/v1/field/attendance', 'MobileApiController', 'postAttendance');
+Router::add('POST', '/api/v1/field/collection', 'MobileApiController', 'postCollection');
+Router::add('POST', '/api/v1/sync',             'MobileApiController', 'batchSync');
+
+// Real-Time Dynamic UPI QR & Receipts & KFS
+Router::add('GET',  '/loans/:id/upi-qr',        'LoanController', 'upiQrJson');
+Router::add('GET',  '/loans/:id/receipt/:pid',  'LoanController', 'receiptPrint');
+Router::add('GET',  '/loans/:id/kfs.pdf',       'LoanController', 'kfsPdf');
+
+// Regulatory Backup
+Router::add('GET',  '/settings/backup.sql',     'SettingsController', 'backupSql');
+
+// Live Regulatory Portfolio Export
+Router::add('GET',  '/reports/export-csv',      'ReportsController', 'exportCsv');
+
+

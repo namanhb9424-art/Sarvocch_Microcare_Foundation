@@ -460,4 +460,24 @@ CREATE TABLE IF NOT EXISTS `rate_limits` (
   INDEX `idx_rate_limit_key_hit` (`key`, `hit_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 26. Grievances & Redressal
+CREATE TABLE IF NOT EXISTS `grievances` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `ticket_no` VARCHAR(40) NOT NULL UNIQUE,
+  `customer_id` INT UNSIGNED DEFAULT NULL,
+  `name` VARCHAR(120) NOT NULL,
+  `phone` VARCHAR(20) NOT NULL,
+  `category` VARCHAR(80) NOT NULL,
+  `details` TEXT NOT NULL,
+  `status` ENUM('open','in_progress','resolved','rejected') DEFAULT 'open',
+  `assigned_to` INT UNSIGNED DEFAULT NULL,
+  `branch` VARCHAR(100) DEFAULT 'Bhopal Head Office',
+  `resolution_notes` TEXT DEFAULT NULL,
+  `resolved_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_grievance_status` (`status`),
+  INDEX `idx_grievance_branch` (`branch`),
+  INDEX `idx_grievance_cust` (`customer_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

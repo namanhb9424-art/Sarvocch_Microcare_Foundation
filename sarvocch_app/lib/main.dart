@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -42,6 +43,49 @@ import 'utils/route_guard.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterCryptography.enable();
+
+  // Global Crash Shield: Intercept framework render exceptions
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('[CRASH_SHIELD] Flutter Framework Error: ${details.exceptionAsString()}');
+  };
+
+  // Global Crash Shield: Intercept uncaught async zone exceptions
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[CRASH_SHIELD] Async Uncaught Error: $error');
+    return true; // handled, prevent app termination
+  };
+
+  // Graceful Error Widget fallback instead of grey screen of death
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: Colors.white,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Color(0xFF0F766E), size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Temporary Display Issue',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                kDebugMode
+                    ? details.exceptionAsString()
+                    : 'The view recovered safely. Please navigate back or retry.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
 
   // Use the encrypted SQLite3MC build through FFI on native platforms.
   if (!kIsWeb) {
