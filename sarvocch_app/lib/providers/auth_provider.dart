@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' show min;
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,8 @@ import 'package:uuid/uuid.dart';
 import '../data/database_helper.dart';
 import '../models/user_model.dart';
 import '../services/password_hash_service.dart';
+import '../services/secure_storage_service.dart';
+import '../services/sync_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserModel? _currentUser;
@@ -60,8 +63,61 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> login(String username, String password) async {
     _isLoading = true;
     notifyListeners();
+    final trimmedUsername = username.trim();
     try {
       final db = await DatabaseHelper.instance.database;
+
+      // 1. Try Live Cloud Login first (if device has internet connectivity)
+      try {
+        final client = HttpClient()..connectionTimeout = const Duration(seconds: 7);
+        final req = await client.postUrl(
+          Uri.parse('${SyncService.cloudBaseUrl}/auth/login'),
+        );
+        req.headers.contentType = ContentType.json;
+        req.write(jsonEncode({
+          'username': trimmedUsername,
+          'password': password,
+          'device_label': 'Sarvoocch Android App',
+        }));
+        final resp = await req.close().timeout(const Duration(seconds: 10));
+        final body = await resp.transform(utf8.decoder).join();
+        client.close();
+
+        if (resp.statusCode == 200) {
+          final parsed = jsonDecode(body) as Map<String, dynamic>? ?? {};
+          if (parsed['ok'] == true && parsed['user'] is Map && parsed['token'] is String) {
+            final cloudToken = parsed['token'] as String;
+            final uMap = Map<String, dynamic>.from(parsed['user'] as Map);
+            await SecureStorageService().writePersistentSecret(
+              SyncService.tokenStorageKey,
+              cloudToken,
+            );
+            final localHash = await PasswordHashService.hash(password);
+            final signedIn = await _upsertCloudAuthenticatedUser(
+              db,
+              uMap,
+              localHash,
+            );
+            if (signedIn != null) {
+              _currentUser = signedIn;
+              _sessionPasswordHash = localHash;
+              notifyListeners();
+              // Pull live cloud data immediately in background
+              SyncService().triggerFullSync(userId: signedIn.id);
+              return true;
+            }
+          }
+        } else if (resp.statusCode == 401 || resp.statusCode == 423 || resp.statusCode == 429) {
+          // Explicit rejection from cloud authoritative server
+          await PasswordHashService.performDummyVerificationWork(password);
+          return false;
+        }
+      } catch (e) {
+        // Offline / network timeout: gracefully proceed to encrypted local verification
+        debugPrint('Cloud auth unavailable, using encrypted offline credential store: $e');
+      }
+
+      // 2. Encrypted Local SQLite Authentication (Offline-First / Fallback)
       final results = await db.rawQuery(
         '''
         SELECT u.*, e.designation 
@@ -71,7 +127,7 @@ class AuthProvider extends ChangeNotifier {
           AND u.auth_status = 'active'
         LIMIT 1
       ''',
-        [username.trim()],
+        [trimmedUsername],
       );
 
       if (results.isNotEmpty) {
@@ -157,6 +213,83 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<UserModel?> _upsertCloudAuthenticatedUser(
+    Database db,
+    Map<String, dynamic> uMap,
+    String passwordHash,
+  ) async {
+    return db.transaction<UserModel?>((txn) async {
+      final cloudId = (uMap['id'] as num).toInt();
+      final cid = uMap['customer_id'] != null
+          ? (uMap['customer_id'] as num).toInt()
+          : null;
+      if (cid != null) {
+        final custExists = await txn.query(
+          'customers',
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [cid],
+          limit: 1,
+        );
+        if (custExists.isEmpty) {
+          await txn.insert('customers', {
+            'id': cid,
+            'name': uMap['name'] ?? 'Customer',
+            'phone': uMap['phone'] ?? '',
+            'branch': uMap['branch'] ?? 'Indore - Vijay Nagar',
+            'stage': 'converted',
+            'kyc_status': 'verified',
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      }
+
+      await txn.insert('users', {
+        'id': cloudId,
+        'username': uMap['username'],
+        'password_hash': passwordHash,
+        'auth_status': 'active',
+        'failed_login_attempts': 0,
+        'locked_until': null,
+        'name': uMap['name'] ?? uMap['username'],
+        'role': uMap['role'] ?? 'field_agent',
+        'branch': uMap['branch'] ?? '',
+        'phone': uMap['phone'] ?? '',
+        'customer_id': cid,
+        'must_change': (uMap['must_change'] as num?)?.toInt() ?? 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      await txn.insert('app_meta', {
+        'key': 'initial_setup_completed',
+        'value': '1',
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      await txn.insert('audit_log', {
+        'operation_id': const Uuid().v4(),
+        'entity_type': 'user',
+        'entity_id': cloudId,
+        'action': 'login_succeeded',
+        'actor_user_id': cloudId,
+        'actor_role': uMap['role'],
+        'actor_name': uMap['name'],
+        'occurred_at': DateTime.now().toIso8601String().substring(0, 19),
+        'details': '{"mode":"cloud_verified"}',
+      });
+
+      final rows = await txn.rawQuery(
+        '''
+        SELECT u.*, e.designation
+        FROM users u
+        LEFT JOIN employees e ON u.id = e.user_id
+        WHERE u.id = ?
+        LIMIT 1
+        ''',
+        [cloudId],
+      );
+      if (rows.isEmpty) return null;
+      return UserModel.fromMap(rows.first);
+    });
   }
 
   Future<bool> validateCurrentSession() async {
@@ -841,8 +974,25 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void logout() {
+    _revokeCloudTokenAsync();
     _currentUser = null;
     _sessionPasswordHash = null;
     notifyListeners();
+  }
+
+  Future<void> _revokeCloudTokenAsync() async {
+    try {
+      final token = await SyncService().readCloudToken();
+      if (token != null) {
+        final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+        final req = await client.postUrl(
+          Uri.parse('${SyncService.cloudBaseUrl}/auth/logout'),
+        );
+        req.headers.set('Authorization', 'Bearer $token');
+        await req.close().timeout(const Duration(seconds: 5));
+        client.close();
+      }
+    } catch (_) {}
+    await SecureStorageService().deleteSecret(SyncService.tokenStorageKey);
   }
 }

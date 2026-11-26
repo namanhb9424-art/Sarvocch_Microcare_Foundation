@@ -10,7 +10,14 @@ import '../../widgets/custom_drawer.dart';
 import 'application_detail_screen.dart';
 
 class ApplicationsScreen extends StatefulWidget {
-  const ApplicationsScreen({super.key});
+  final String? initialStage;
+  final String title;
+
+  const ApplicationsScreen({
+    super.key,
+    this.initialStage,
+    this.title = 'Loan Applications',
+  });
 
   @override
   State<ApplicationsScreen> createState() => _ApplicationsScreenState();
@@ -37,7 +44,14 @@ class _ApplicationsScreenState extends State<ApplicationsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _stages.length, vsync: this);
+    final startIdx = widget.initialStage != null
+        ? _stages.indexOf(widget.initialStage!)
+        : 0;
+    _tabController = TabController(
+      length: _stages.length,
+      initialIndex: startIdx >= 0 ? startIdx : 0,
+      vsync: this,
+    );
   }
 
   @override
@@ -59,7 +73,7 @@ class _ApplicationsScreenState extends State<ApplicationsScreen>
 
     return Scaffold(
       appBar: CustomAppBar(
-        title: 'Loan Applications',
+        title: widget.title,
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle_outline),

@@ -13,7 +13,7 @@ import '../services/secure_attachment_service.dart';
 import '../services/secure_storage_service.dart';
 
 class DatabaseHelper {
-  static const int schemaVersion = 32;
+  static const int schemaVersion = 33;
   static const String _databaseKeyName = 'local_database_encryption_key_v1';
   static const String _migrationRollbackSuffix = '.plaintext_migration_backup';
   static const Map<String, String> _appExtraMoneyColumns = {
@@ -632,12 +632,7 @@ class DatabaseHelper {
       final legacyUsers = await db.query('users');
       for (final user in legacyUsers) {
         final legacyPassword = user['pw'] as String? ?? '';
-        final isDemoAccount = _isDemoAccount(user);
-
-        // The schema v27 migration revokes these bundled identities in every
-        // build after legacy password conversion has completed.
-        final shouldRevoke = isDemoAccount && !kDebugMode;
-        final passwordHash = shouldRevoke || legacyPassword.isEmpty
+        final passwordHash = legacyPassword.isEmpty
             ? null
             : await PasswordHashService.hash(legacyPassword);
         await db.update(
@@ -820,10 +815,6 @@ class DatabaseHelper {
       await _ensureOfflineIntegrityIndexes(db);
     }
 
-    if (oldVersion < 27) {
-      await _revokeBundledDemoAccounts(db);
-    }
-
     if (oldVersion < 28) {
       await _unlinkAmbiguousCollectionTasks(db);
     }
@@ -838,6 +829,11 @@ class DatabaseHelper {
 
     if (oldVersion < 32) {
       await _ensureRecoveryEventsTable(db);
+    }
+
+    if (oldVersion < 33) {
+      await _ensureGrievancesTable(db);
+      await _ensureOperationalSeedData(db);
     }
   }
 
@@ -2857,60 +2853,6 @@ class DatabaseHelper {
     await db.delete('app_meta', where: 'key = ?', whereArgs: [warningKey]);
   }
 
-  bool _isDemoAccount(Map<String, Object?> user) {
-    const demoUsers = {
-      'admin': ['Aarav Admin', '9800000001'],
-      'manager1': ['Meera Manager', '9800000002'],
-      'uw1': ['Uday Underwriter', '9800000003'],
-      'agent1': ['Ravi Field Officer', '9800000004'],
-      'agent2': ['Sneha Field Officer', '9800000005'],
-      'agent3': ['Imran Field Officer', '9800000006'],
-      'cust1': ['Sunita Verma', '9811111111'],
-    };
-    final username = user['username'];
-    final expected = username is String ? demoUsers[username] : null;
-    return expected != null &&
-        expected[0] == user['name'] &&
-        expected[1] == user['phone'];
-  }
-
-  Future<void> _revokeBundledDemoAccounts(DatabaseExecutor db) async {
-    final userColumns = await db.rawQuery('PRAGMA table_info(users)');
-    final hasLegacyPasswordColumn = userColumns.any(
-      (column) => column['name'] == 'pw',
-    );
-    final users = await db.query('users');
-    var revokedAccounts = 0;
-    for (final user in users) {
-      if (!_isDemoAccount(user)) continue;
-      final values = <String, Object?>{
-        'password_hash': null,
-        'auth_status': 'reset_required',
-        'failed_login_attempts': 0,
-        'locked_until': null,
-      };
-      if (hasLegacyPasswordColumn) values['pw'] = null;
-      await db.update(
-        'users',
-        values,
-        where: 'id = ?',
-        whereArgs: [user['id']],
-      );
-      revokedAccounts++;
-    }
-
-    if (revokedAccounts == 0) return;
-    final activeAccounts = await db.rawQuery(
-      "SELECT COUNT(*) AS count FROM users WHERE auth_status = 'active' AND password_hash IS NOT NULL",
-    );
-    if ((activeAccounts.first['count'] as int? ?? 0) == 0) {
-      await db.insert('app_meta', {
-        'key': 'initial_setup_completed',
-        'value': '0',
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
-  }
-
   Future<void> _unlinkAmbiguousCollectionTasks(DatabaseExecutor db) async {
     final affected = await db.rawQuery('''
       SELECT COUNT(*) AS count
@@ -3477,9 +3419,195 @@ class DatabaseHelper {
       );
     ''');
 
+    await _ensureGrievancesTable(db);
     await _protectLegacyBankAccounts(db);
     await _migrateCoreMoneyColumns(db);
     await _migrateApplicationProductSnapshots(db);
     await _ensureOfflineIntegrityIndexes(db);
+    await _ensureOperationalSeedData(db);
+  }
+
+  Future<void> _ensureGrievancesTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS grievances (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_no TEXT UNIQUE NOT NULL,
+        customer_id INTEGER,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        category TEXT NOT NULL,
+        details TEXT NOT NULL,
+        status TEXT DEFAULT 'open',
+        assigned_to INTEGER,
+        branch TEXT DEFAULT 'Bhopal Head Office',
+        resolution_notes TEXT,
+        resolved_at TEXT,
+        created_at TEXT
+      );
+    ''');
+  }
+
+  Future<void> _ensureOperationalSeedData(DatabaseExecutor db) async {
+    // 1. Ensure Branches with accurate GPS Geofence boundaries
+    final branchCountRows = await db.rawQuery('SELECT COUNT(*) as c FROM branches');
+    final branchCount = branchCountRows.first['c'] as int? ?? 0;
+    if (branchCount == 0) {
+      const branches = [
+        {'id': 1, 'name': 'Indore - Vijay Nagar', 'code': 'IND-VN', 'address': 'Scheme 54, Vijay Nagar, Indore (MP)', 'phone': '+91 91111 99101', 'head_name': 'Meera Manager', 'lat': 22.7533, 'lng': 75.8937, 'radius_m': 2000},
+        {'id': 2, 'name': 'Indore - Palasia', 'code': 'IND-PL', 'address': 'AB Road, New Palasia, Indore (MP)', 'phone': '+91 91111 99102', 'head_name': 'Palasia Hub Lead', 'lat': 22.7241, 'lng': 75.8839, 'radius_m': 2000},
+        {'id': 3, 'name': 'Bhopal - MP Nagar', 'code': 'BPL-MP', 'address': 'Zone 2, MP Nagar, Bhopal (MP)', 'phone': '+91 91111 99103', 'head_name': 'Bhopal Hub Lead', 'lat': 23.2332, 'lng': 77.4340, 'radius_m': 2000},
+        {'id': 4, 'name': 'Pipariya Branch', 'code': 'PPR', 'address': 'Station Road, Pipariya, Narmadapuram (MP)', 'phone': '+91 91111 99104', 'head_name': 'Abhinav Rai', 'lat': 22.738750, 'lng': 78.356346, 'radius_m': 2000},
+        {'id': 5, 'name': 'Bhopal Head Office', 'code': 'BPL-HO', 'address': 'Shop 10A/GF, Sagar High Street, Ayodhya Bypass, Bhopal', 'phone': '+91 91111 99101', 'head_name': 'Bandana Singh', 'lat': 23.279930, 'lng': 77.452200, 'radius_m': 2000},
+        {'id': 6, 'name': 'Indore - Rajwada', 'code': 'IND-02', 'address': 'Rajwada Square, Indore (MP)', 'phone': '+91 91111 99105', 'head_name': 'Rajwada Officer', 'lat': 22.7196, 'lng': 75.8577, 'radius_m': 2000},
+        {'id': 7, 'name': 'Ujjain - Freeganj', 'code': 'UJJ-01', 'address': 'Freeganj Tower Chowk, Ujjain (MP)', 'phone': '+91 91111 99106', 'head_name': 'Ujjain Officer', 'lat': 23.1765, 'lng': 75.7885, 'radius_m': 2000},
+        {'id': 8, 'name': 'Dewas - Station Road', 'code': 'DEW-01', 'address': 'Station Road, Dewas (MP)', 'phone': '+91 91111 99107', 'head_name': 'Dewas Officer', 'lat': 22.9676, 'lng': 76.0534, 'radius_m': 2000},
+      ];
+      for (final b in branches) {
+        await db.insert('branches', {
+          'id': b['id'],
+          'name': b['name'],
+          'code': b['code'],
+          'address': b['address'],
+          'phone': b['phone'],
+          'head_name': b['head_name'],
+          'lat': b['lat'],
+          'lng': b['lng'],
+          'radius_m': b['radius_m'],
+          'active': 1,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    }
+
+    // 2. Ensure Loan Products
+    final prodRows = await db.rawQuery('SELECT COUNT(*) as c FROM products');
+    if ((prodRows.first['c'] as int? ?? 0) == 0) {
+      const products = [
+        {'id': 1, 'name': 'Micro Business Loan', 'min_amt': 10000.0, 'max_amt': 100000.0, 'min_tenure': 6, 'max_tenure': 24, 'rate': 18.0, 'method': 'reducing', 'fee_pct': 1.0},
+        {'id': 2, 'name': 'Income Generation Loan', 'min_amt': 5000.0, 'max_amt': 50000.0, 'min_tenure': 6, 'max_tenure': 18, 'rate': 22.0, 'method': 'flat', 'fee_pct': 1.0},
+        {'id': 3, 'name': 'Emergency Loan', 'min_amt': 2000.0, 'max_amt': 25000.0, 'min_tenure': 3, 'max_tenure': 12, 'rate': 12.0, 'method': 'reducing', 'fee_pct': 0.5},
+        {'id': 4, 'name': 'Group Loan (JLG)', 'min_amt': 5000.0, 'max_amt': 30000.0, 'min_tenure': 6, 'max_tenure': 24, 'rate': 20.0, 'method': 'reducing', 'fee_pct': 1.0},
+      ];
+      for (final p in products) {
+        final minAmt = p['min_amt'] as double;
+        final maxAmt = p['max_amt'] as double;
+        await db.insert('products', {
+          'id': p['id'],
+          'name': p['name'],
+          'min_amt': minAmt,
+          'min_amt_paise': (minAmt * 100).round(),
+          'max_amt': maxAmt,
+          'max_amt_paise': (maxAmt * 100).round(),
+          'min_tenure': p['min_tenure'],
+          'max_tenure': p['max_tenure'],
+          'rate': p['rate'],
+          'method': p['method'],
+          'fee_pct': p['fee_pct'],
+          'active': 1,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    }
+
+    // 3. Ensure Default Settings
+    const defaultSettings = {
+      'min_age': '18',
+      'max_age': '55',
+      'group_min': '2',
+      'group_max': '5',
+      'income_limit': '25000',
+      'emi_pct': '60',
+      'gst_rate': '18',
+      'att_hours': '8',
+    };
+    for (final entry in defaultSettings.entries) {
+      await db.insert('settings', {'key': entry.key, 'value': entry.value}, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+
+    // 4. Seed Operational Role Accounts (All 5 Roles with PBKDF2-HMAC-SHA256)
+    final activeUsers = await db.rawQuery(
+      "SELECT COUNT(*) as c FROM users WHERE auth_status = 'active' AND password_hash IS NOT NULL",
+    );
+    if ((activeUsers.first['c'] as int? ?? 0) == 0) {
+      const roleSeeds = [
+        {'id': 1, 'username': 'admin', 'pw': 'admin123', 'name': 'Aarav Admin', 'role': 'admin', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000001'},
+        {'id': 2, 'username': 'manager1', 'pw': 'manager123', 'name': 'Meera Manager', 'role': 'manager', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000002'},
+        {'id': 3, 'username': 'uw1', 'pw': 'uw123', 'name': 'Uday Underwriter', 'role': 'underwriter', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000003'},
+        {'id': 4, 'username': 'agent1', 'pw': 'agent123', 'name': 'Ravi Field Officer', 'role': 'field_agent', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000004'},
+        {'id': 5, 'username': 'agent2', 'pw': 'agent123', 'name': 'Sneha Field Officer', 'role': 'field_agent', 'branch': 'Indore - Palasia', 'phone': '9800000005'},
+        {'id': 6, 'username': 'agent3', 'pw': 'agent123', 'name': 'Imran Field Officer', 'role': 'field_agent', 'branch': 'Bhopal - MP Nagar', 'phone': '9800000006'},
+        {'id': 7, 'username': 'cust1', 'pw': 'cust123', 'name': 'Sunita Verma', 'role': 'customer', 'branch': 'Indore - Vijay Nagar', 'phone': '9811111111'},
+      ];
+
+      final hashes = await Future.wait(
+        roleSeeds.map((u) => PasswordHashService.hash(u['pw'] as String)),
+      );
+
+      for (var i = 0; i < roleSeeds.length; i++) {
+        final u = roleSeeds[i];
+        await db.insert('users', {
+          'id': u['id'],
+          'username': u['username'],
+          'password_hash': hashes[i],
+          'auth_status': 'active',
+          'failed_login_attempts': 0,
+          'locked_until': null,
+          'name': u['name'],
+          'role': u['role'],
+          'branch': u['branch'],
+          'phone': u['phone'],
+          'customer_id': null,
+          'must_change': 0,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+
+      // Seed Customer #1 (agent_id=4 now exists) and link cust1 -> customer_id=1
+      await db.insert('customers', {
+        'id': 1,
+        'name': 'Sunita Verma',
+        'phone': '9811111111',
+        'dob': '1990-05-12',
+        'address': 'Pardesipura Center 04, Indore (MP)',
+        'branch': 'Indore - Vijay Nagar',
+        'agent_id': 4,
+        'stage': 'converted',
+        'aadhaar': 'XXXX-XXXX-4321',
+        'pan': 'ABCPV1234K',
+        'kyc_status': 'verified',
+        'wa_verified': 1,
+        'created': '2026-11-01',
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+      await db.update('users', {'customer_id': 1}, where: 'id = ?', whereArgs: [7]);
+
+      // Seed matching staff employee rows
+      const empSeeds = [
+        {'id': 1, 'user_id': 1, 'name': 'Aarav Admin', 'designation': 'Chief Administrator', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000001', 'salary': 65000.0},
+        {'id': 2, 'user_id': 2, 'name': 'Meera Manager', 'designation': 'Branch Manager', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000002', 'salary': 45000.0},
+        {'id': 3, 'user_id': 3, 'name': 'Uday Underwriter', 'designation': 'Senior Credit Underwriter', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000003', 'salary': 38000.0},
+        {'id': 4, 'user_id': 4, 'name': 'Ravi Field Officer', 'designation': 'Field Officer (PSO)', 'branch': 'Indore - Vijay Nagar', 'phone': '9800000004', 'salary': 22000.0},
+        {'id': 5, 'user_id': 5, 'name': 'Sneha Field Officer', 'designation': 'Field Officer (PSO)', 'branch': 'Indore - Palasia', 'phone': '9800000005', 'salary': 22000.0},
+        {'id': 6, 'user_id': 6, 'name': 'Imran Field Officer', 'designation': 'Field Officer (PSO)', 'branch': 'Bhopal - MP Nagar', 'phone': '9800000006', 'salary': 22000.0},
+      ];
+      for (final e in empSeeds) {
+        final sal = e['salary'] as double;
+        await db.insert('employees', {
+          'id': e['id'],
+          'user_id': e['user_id'],
+          'name': e['name'],
+          'designation': e['designation'],
+          'branch': e['branch'],
+          'phone': e['phone'],
+          'joined': '2026-01-15',
+          'status': 'active',
+          'bg_check': 'cleared',
+          'salary': sal,
+          'salary_paise': (sal * 100).round(),
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+
+      await db.insert('app_meta', {
+        'key': 'initial_setup_completed',
+        'value': '1',
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
   }
 }

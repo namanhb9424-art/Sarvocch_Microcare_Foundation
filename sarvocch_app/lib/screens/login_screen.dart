@@ -255,7 +255,51 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  // Quick Role Switcher / Credentials Helper (All 5 Roles)
+                  Card(
+                    child: ExpansionTile(
+                      leading: const Icon(Icons.verified_user_outlined, color: AppTheme.tealPrimary, size: 20),
+                      title: const Text(
+                        'Role Credentials (Cloud & Offline)',
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: const Text(
+                        'Tap any role to fill working login details',
+                        style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                      ),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final cred in const [
+                              ['Admin', 'admin', 'admin123'],
+                              ['Branch Manager', 'manager1', 'manager123'],
+                              ['Underwriter', 'uw1', 'uw123'],
+                              ['Field Officer (Indore)', 'agent1', 'agent123'],
+                              ['Field Officer (Palasia)', 'agent2', 'agent123'],
+                              ['Field Officer (Bhopal)', 'agent3', 'agent123'],
+                              ['Customer Portal', 'cust1', 'cust123'],
+                            ])
+                              ActionChip(
+                                avatar: const Icon(Icons.person, size: 15, color: AppTheme.tealPrimary),
+                                label: Text('${cred[0]} (${cred[1]})', style: const TextStyle(fontSize: 11.5)),
+                                onPressed: () {
+                                  _usernameCtrl.text = cred[1];
+                                  _passwordCtrl.text = cred[2];
+                                  setState(() => _errorMessage = null);
+                                },
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
 
                   if (auth.needsAccountRecovery)
                     const Card(

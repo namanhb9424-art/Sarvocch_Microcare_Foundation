@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../data/database_helper.dart';
 import '../models/attendance_model.dart';
 import '../models/branch_model.dart';
+import '../services/sync_service.dart';
 
 class AttendanceProvider extends ChangeNotifier {
   List<AttendanceRecordModel> _records = [];
@@ -259,6 +260,21 @@ class AttendanceProvider extends ChangeNotifier {
         });
       });
 
+      await SyncService().enqueueAction(
+        userId: userId,
+        action: 'attendance_punch_in',
+        operationId: operationId,
+        payload: {
+          'day': todayStr,
+          'in_time': nowIso,
+          'lat': currentLat,
+          'lng': currentLng,
+          'in_dist': distMeters?.round(),
+          'branch': branchName,
+        },
+      );
+      SyncService().triggerFullSync(userId: userId);
+
       await fetchAttendanceData(userId);
       return {
         'success': true,
@@ -361,6 +377,16 @@ class AttendanceProvider extends ChangeNotifier {
         }
         return changed;
       });
+
+      if (updated == 1) {
+        await SyncService().enqueueAction(
+          userId: userId,
+          action: 'attendance_punch_out',
+          operationId: operationId,
+          payload: {'day': todayStr, 'out_time': nowIso},
+        );
+        SyncService().triggerFullSync(userId: userId);
+      }
 
       await fetchAttendanceData(userId);
       return updated == 1;

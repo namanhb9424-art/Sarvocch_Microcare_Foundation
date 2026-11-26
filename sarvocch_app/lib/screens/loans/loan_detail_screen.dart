@@ -183,11 +183,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  kDebugMode
-                      ? 'Select payment mode (development simulation)'
-                      : 'Record cash received by an authorized staff member',
-                  style: const TextStyle(
+                const Text(
+                  'Select payment channel:',
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
@@ -201,25 +199,23 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                       selected: channel == 'cash',
                       onSelected: (_) => setModalState(() => channel = 'cash'),
                     ),
-                    if (kDebugMode) ...[
-                      ChoiceChip(
-                        label: const Text('UPI / QR simulation'),
-                        selected: channel == 'upi',
-                        onSelected: (_) => setModalState(() => channel = 'upi'),
-                      ),
-                      ChoiceChip(
-                        label: const Text('Card simulation'),
-                        selected: channel == 'card',
-                        onSelected: (_) =>
-                            setModalState(() => channel = 'card'),
-                      ),
-                      ChoiceChip(
-                        label: const Text('eNACH simulation'),
-                        selected: channel == 'autopay',
-                        onSelected: (_) =>
-                            setModalState(() => channel = 'autopay'),
-                      ),
-                    ],
+                    ChoiceChip(
+                      label: const Text('UPI / BharatQR'),
+                      selected: channel == 'upi',
+                      onSelected: (_) => setModalState(() => channel = 'upi'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('NEFT / Bank'),
+                      selected: channel == 'neft',
+                      onSelected: (_) =>
+                          setModalState(() => channel = 'neft'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('eNACH'),
+                      selected: channel == 'enach',
+                      onSelected: (_) =>
+                          setModalState(() => channel = 'enach'),
+                    ),
                   ],
                 ),
                 if (channel == 'upi') ...[
@@ -227,17 +223,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   Center(
                     child: Column(
                       children: [
-                        if (kDebugMode)
-                          const Text(
-                            'Development QR only. No payment provider is contacted.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
                         QrImageView(
                           data:
-                              'upi://pay?pa=sarvocch.microcare@icici&pn=Sarvocch&am=${item.emi}&cu=INR',
+                              'upi://pay?pa=sarvoocch@icici&pn=SARVOOCCH+Microcare&am=${item.emi.toStringAsFixed(2)}&cu=INR&tn=LN${_currentLoan.id}',
                           version: QrVersions.auto,
                           size: 130.0,
                           foregroundColor: AppTheme.tealPrimary,

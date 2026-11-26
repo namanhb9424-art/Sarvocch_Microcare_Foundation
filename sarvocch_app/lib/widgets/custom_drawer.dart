@@ -67,12 +67,33 @@ class CustomDrawer extends StatelessWidget {
           icon: Icons.folder_open_outlined,
           route: '/applications',
         ),
+      if (user.can('approve'))
+        _NavItem(
+          id: 'approve',
+          label: 'Approvals Queue',
+          icon: Icons.check_circle_outline,
+          route: '/approvals',
+        ),
+      if (user.can('disburse'))
+        _NavItem(
+          id: 'disburse',
+          label: 'Disbursements Queue',
+          icon: Icons.account_balance_outlined,
+          route: '/disbursements',
+        ),
       if (user.can('loans'))
         _NavItem(
           id: 'loans',
-          label: 'Loans & EMI Repayments',
-          icon: Icons.payments_outlined,
+          label: 'Loan Accounts',
+          icon: Icons.savings_outlined,
           route: '/loans',
+        ),
+      if (user.can('payments'))
+        _NavItem(
+          id: 'payments',
+          label: 'Collect Repayment',
+          icon: Icons.payments_outlined,
+          route: '/payments',
         ),
       if (user.can('kyc'))
         _NavItem(
@@ -136,6 +157,27 @@ class CustomDrawer extends StatelessWidget {
           label: 'Portfolio Reports & PAR',
           icon: Icons.analytics_outlined,
           route: '/reports',
+        ),
+      if (user.can('grievances'))
+        _NavItem(
+          id: 'grievances',
+          label: 'Grievance Redressal',
+          icon: Icons.support_agent_outlined,
+          route: '/grievances',
+        ),
+      if (user.can('sync'))
+        _NavItem(
+          id: 'sync',
+          label: 'Cloud Sync & Logs',
+          icon: Icons.cloud_sync_outlined,
+          route: '/sync',
+        ),
+      if (user.role == 'admin')
+        _NavItem(
+          id: 'holidays',
+          label: 'Holiday Calendar',
+          icon: Icons.calendar_month_outlined,
+          route: '/holidays',
         ),
       _NavItem(
         id: 'profile',

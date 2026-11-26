@@ -9,6 +9,7 @@ import '../models/application_model.dart';
 import '../models/loan_model.dart';
 import '../models/loan_product_model.dart';
 import '../services/currency_amount.dart';
+import '../services/sync_service.dart';
 
 class LoanProvider extends ChangeNotifier {
   List<ApplicationModel> _applications = [];
@@ -889,11 +890,8 @@ class LoanProvider extends ChangeNotifier {
         actorUserId <= 0) {
       return false;
     }
-    const productionChannels = {'cash'};
-    const developmentChannels = {'cash', 'upi', 'card', 'autopay'};
-    if (!(kDebugMode ? developmentChannels : productionChannels).contains(
-      channel,
-    )) {
+    const allowedChannels = {'cash', 'upi', 'neft', 'enach', 'card', 'autopay'};
+    if (!allowedChannels.contains(channel.toLowerCase())) {
       return false;
     }
 
@@ -1032,6 +1030,9 @@ class LoanProvider extends ChangeNotifier {
           );
         }
       });
+
+      await SyncService().updatePendingCount();
+      SyncService().triggerFullSync(userId: actorUserId);
 
       await fetchAll(actorUserId: actorUserId);
       return true;

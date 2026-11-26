@@ -8,6 +8,7 @@ import '../models/customer_model.dart';
 import '../services/local_sensitive_data_service.dart';
 import '../services/secure_attachment_service.dart';
 import '../services/currency_amount.dart';
+import '../services/sync_service.dart';
 
 class CustomerProvider extends ChangeNotifier {
   static const _kycConsentNoticeVersion = 'mfi-kyc-existing-copy-v1';
@@ -417,6 +418,20 @@ class CustomerProvider extends ChangeNotifier {
           'details': jsonEncode({'branch': requestedBranch, 'stage': 'lead'}),
         });
       });
+      await SyncService().enqueueAction(
+        userId: actorUserId,
+        action: 'customer_created',
+        operationId: 'cust_${id}_${phone.trim()}',
+        payload: {
+          'name': name.trim(),
+          'phone': phone.trim(),
+          'address': address.trim(),
+          'branch': requestedBranch,
+          'stage': 'lead',
+        },
+      );
+      SyncService().triggerFullSync(userId: actorUserId);
+
       await fetchCustomers(actorUserId: actorUserId);
       return id;
     } catch (_) {

@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../data/database_helper.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/location_service.dart';
+import '../../services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/custom_drawer.dart';
@@ -226,7 +228,28 @@ class _BranchesScreenState extends State<BranchesScreen> {
                 controller: radiusCtrl,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Punch Radius (Meters, optional)',
+                  labelText: 'Geofence Punch Radius (Meters)',
+                  hintText: '2000',
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final loc = await LocationService.instance.getCurrentCoordinates();
+                    if (loc.isRealGps && loc.latitude != null && loc.longitude != null) {
+                      latCtrl.text = loc.latitude!.toStringAsFixed(6);
+                      lngCtrl.text = loc.longitude!.toStringAsFixed(6);
+                      if (radiusCtrl.text.trim().isEmpty) radiusCtrl.text = '2000';
+                    } else if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(content: Text(loc.errorMessage ?? 'GPS unavailable')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.my_location, size: 16),
+                  label: const Text('Use Current GPS Coordinates'),
                 ),
               ),
             ],
@@ -315,6 +338,22 @@ class _BranchesScreenState extends State<BranchesScreen> {
                     }),
                   });
                 });
+                await SyncService().enqueueAction(
+                  userId: user.id,
+                  action: 'branch_created',
+                  operationId: 'branch_${nameCtrl.text.trim()}_${DateTime.now().millisecondsSinceEpoch}',
+                  payload: {
+                    'name': nameCtrl.text.trim(),
+                    'code': codeCtrl.text.trim(),
+                    'address': addressCtrl.text.trim(),
+                    'phone': phoneCtrl.text.trim(),
+                    'head_name': headCtrl.text.trim(),
+                    'lat': hasCoordinates ? latitude : null,
+                    'lng': hasCoordinates ? longitude : null,
+                    'radius_m': radius > 0 ? radius : 2000,
+                  },
+                );
+                SyncService().triggerFullSync(userId: user.id);
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadBranches();
               } catch (_) {

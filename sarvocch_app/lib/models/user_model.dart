@@ -98,6 +98,7 @@ class UserModel {
       'kycform',
       'pregrt',
       'attendance',
+      'grievances',
     };
     const underwriterPerms = {
       'dashboard',
@@ -110,6 +111,8 @@ class UserModel {
       'calculator',
       'pregrt',
       'attendance',
+      'reports',
+      'grievances',
     };
     const fieldAgentPerms = {
       'crm',
@@ -125,8 +128,9 @@ class UserModel {
       'kycform',
       'pregrt',
       'attendance',
+      'grievances',
     };
-    const customerPerms = {'portal', 'payments', 'calculator', 'profile'};
+    const customerPerms = {'portal', 'payments', 'calculator', 'profile', 'grievances'};
 
     switch (role) {
       case 'manager':

@@ -31,4 +31,11 @@ class SecureStorageService {
       );
     }
   }
+
+  /// Safely deletes a stored key (used for token revocation on logout).
+  Future<void> deleteSecret(String key) async {
+    try {
+      await _storage.delete(key: key);
+    } catch (_) {}
+  }
 }

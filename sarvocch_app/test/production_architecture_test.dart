@@ -57,13 +57,21 @@ void main() {
       expect(RouteGuard.hasAccess('/settings', adminUser), isTrue);
       expect(RouteGuard.hasAccess('/users', adminUser), isTrue);
       expect(RouteGuard.hasAccess('/dashboard', adminUser), isTrue);
+      expect(RouteGuard.hasAccess('/holidays', adminUser), isTrue);
+      expect(RouteGuard.hasAccess('/grievances', adminUser), isTrue);
+      expect(RouteGuard.hasAccess('/payments', adminUser), isTrue);
+      expect(RouteGuard.hasAccess('/approvals', adminUser), isTrue);
+      expect(RouteGuard.hasAccess('/disbursements', adminUser), isTrue);
+      expect(RouteGuard.hasAccess('/sync', adminUser), isTrue);
 
-      // Customer only has access to customer portal, calculator, etc.
+      // Customer only has access to customer portal, calculator, grievances, payments
       expect(RouteGuard.hasAccess('/portal', customerUser), isTrue);
       expect(RouteGuard.hasAccess('/calculator', customerUser), isTrue);
+      expect(RouteGuard.hasAccess('/grievances', customerUser), isTrue);
       expect(RouteGuard.hasAccess('/settings', customerUser), isFalse);
       expect(RouteGuard.hasAccess('/users', customerUser), isFalse);
       expect(RouteGuard.hasAccess('/hrm', customerUser), isFalse);
+      expect(RouteGuard.hasAccess('/approvals', customerUser), isFalse);
 
       // Null user has no access to protected routes
       expect(RouteGuard.hasAccess('/dashboard', null), isFalse);

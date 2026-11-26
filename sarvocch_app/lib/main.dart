@@ -11,8 +11,10 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'providers/attendance_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/customer_provider.dart';
+import 'providers/grievance_provider.dart';
 import 'providers/loan_provider.dart';
 import 'providers/pregrt_provider.dart';
+import 'services/sync_service.dart';
 
 import 'screens/applications/applications_screen.dart';
 import 'screens/applications/apply_loan_screen.dart';
@@ -23,9 +25,11 @@ import 'screens/crm/crm_list_screen.dart';
 import 'screens/crm/kyc_form_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/field/field_tasks_screen.dart';
+import 'screens/grievances/grievances_screen.dart';
 import 'screens/hrm/hrm_screen.dart';
 import 'screens/kyc_verify/kyc_verify_screen.dart';
 import 'screens/loans/loans_list_screen.dart';
+import 'screens/loans/payments_register_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/initial_setup_screen.dart';
 import 'screens/portal/customer_portal_screen.dart';
@@ -34,7 +38,9 @@ import 'screens/products/products_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/reports/reports_screen.dart';
 import 'screens/settings/admin_settings_screen.dart';
+import 'screens/settings/holidays_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/sync/sync_hub_screen.dart';
 import 'screens/users/user_management_screen.dart';
 import 'screens/whatsapp/whatsapp_screen.dart';
 import 'theme/app_theme.dart';
@@ -114,7 +120,16 @@ class SarvoocchApp extends StatelessWidget {
       '/pregrt': (_) => const PreGrtScreen(),
       '/apply': (_) => const ApplyLoanScreen(),
       '/applications': (_) => const ApplicationsScreen(),
+      '/approvals': (_) => const ApplicationsScreen(
+        initialStage: 'submitted',
+        title: 'Approvals & Underwriting',
+      ),
+      '/disbursements': (_) => const ApplicationsScreen(
+        initialStage: 'approved',
+        title: 'Disbursements Queue',
+      ),
       '/loans': (_) => const LoansListScreen(),
+      '/payments': (_) => const PaymentsRegisterScreen(),
       '/kyc-verify': (_) => const KycVerifyScreen(),
       '/calculator': (_) => const EmiCalculatorScreen(),
       '/products': (_) => const ProductsScreen(),
@@ -122,8 +137,11 @@ class SarvoocchApp extends StatelessWidget {
       '/attendance': (_) => const AttendanceScreen(),
       '/branches': (_) => const BranchesScreen(),
       '/hrm': (_) => const HrmScreen(),
+      '/grievances': (_) => const GrievancesScreen(),
       '/whatsapp': (_) => const WhatsAppScreen(),
+      '/sync': (_) => const SyncHubScreen(),
       '/reports': (_) => const ReportsScreen(),
+      '/holidays': (_) => const HolidaysScreen(),
       '/profile': (_) => const ProfileScreen(),
       '/settings': (_) => const AdminSettingsScreen(),
       '/users': (_) => const UserManagementScreen(),
@@ -137,6 +155,8 @@ class SarvoocchApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
         ChangeNotifierProvider(create: (_) => PreGrtProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+        ChangeNotifierProvider(create: (_) => GrievanceProvider()),
+        ChangeNotifierProvider.value(value: SyncService()),
       ],
       child: MaterialApp(
         navigatorKey: _rootNavigatorKey,
