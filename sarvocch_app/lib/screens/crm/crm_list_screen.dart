@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../data/database_helper.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/customer_provider.dart';
 import '../../theme/app_theme.dart';
@@ -285,73 +286,137 @@ class _CrmListScreenState extends State<CrmListScreen> {
     }
   }
 
-  void _showAddCustomerDialog(BuildContext context) {
+  Future<void> _showAddCustomerDialog(BuildContext context) async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final addressCtrl = TextEditingController();
     final user = context.read<AuthProvider>().currentUser;
     if (user == null) return;
-    final branchCtrl =
-        TextEditingController(text: user.role == 'admin' ? '' : user.branch);
 
-    showDialog(
+    final db = await DatabaseHelper.instance.database;
+    final branchRows = await db.query(
+      'branches',
+      columns: ['name'],
+      where: 'active = 1',
+      orderBy: 'id ASC',
+    );
+    final branchNames = branchRows
+        .map((row) => row['name'] as String)
+        .where((name) => name.isNotEmpty)
+        .toList();
+    String selectedBranch = user.role == 'admin'
+        ? (branchNames.contains(user.branch)
+              ? user.branch
+              : (branchNames.isNotEmpty ? branchNames.first : ''))
+        : user.branch;
+    if (!context.mounted) return;
+    String? dialogError;
+
+    await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add New Customer Lead',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                  controller: nameCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Customer Full Name *')),
-              const SizedBox(height: 12),
-              TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration:
-                      const InputDecoration(labelText: 'Mobile Number *')),
-              const SizedBox(height: 12),
-              TextField(
-                  controller: addressCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Village / Address *')),
-              const SizedBox(height: 12),
-              TextField(
-                controller: branchCtrl,
-                enabled: user.role == 'admin',
-                decoration: const InputDecoration(labelText: 'Branch *'),
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add New Customer Lead',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (dialogError != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.dangerLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      dialogError!,
+                      style: const TextStyle(
+                        color: AppTheme.danger,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+                TextField(
+                    controller: nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration:
+                        const InputDecoration(labelText: 'Customer Full Name *')),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile Number (10 digits) *',
+                      hintText: 'e.g. 9826012345',
+                    )),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: addressCtrl,
+                    decoration:
+                        const InputDecoration(labelText: 'Village / Address *')),
+                const SizedBox(height: 12),
+                if (user.role == 'admin' && branchNames.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: branchNames.contains(selectedBranch)
+                        ? selectedBranch
+                        : branchNames.first,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Branch *'),
+                    items: branchNames
+                        .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedBranch = val);
+                    },
+                  )
+                else
+                  TextFormField(
+                    initialValue: selectedBranch,
+                    enabled: false,
+                    decoration: const InputDecoration(labelText: 'Branch *'),
+                  ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final createdId =
-                  await context.read<CustomerProvider>().createCustomer(
-                        name: nameCtrl.text.trim(),
-                        phone: phoneCtrl.text.trim(),
-                        address: addressCtrl.text.trim(),
-                        branch: branchCtrl.text.trim(),
-                        actorUserId: user.id,
-                      );
-              if (createdId != null && ctx.mounted) Navigator.pop(ctx);
-              if (createdId == null && ctx.mounted) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(
-                      content: Text(
-                          'Customer was not saved. Check required details, phone number and branch access.')),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final custProv = context.read<CustomerProvider>();
+                final createdId = await custProv.createCustomer(
+                  name: nameCtrl.text.trim(),
+                  phone: phoneCtrl.text.trim(),
+                  address: addressCtrl.text.trim(),
+                  branch: selectedBranch.trim(),
+                  actorUserId: user.id,
                 );
-              }
-            },
-            child: const Text('Save Lead'),
-          ),
-        ],
+                if (createdId != null && ctx.mounted) {
+                  Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Customer lead saved successfully!'),
+                        backgroundColor: AppTheme.success,
+                      ),
+                    );
+                  }
+                } else if (ctx.mounted) {
+                  setDialogState(() {
+                    dialogError = custProv.lastError ??
+                        'Customer was not saved. Check required details, phone number and branch access.';
+                  });
+                }
+              },
+              child: const Text('Save Lead'),
+            ),
+          ],
+        ),
       ),
     );
   }

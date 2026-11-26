@@ -31,7 +31,6 @@ import 'screens/kyc_verify/kyc_verify_screen.dart';
 import 'screens/loans/loans_list_screen.dart';
 import 'screens/loans/payments_register_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/initial_setup_screen.dart';
 import 'screens/portal/customer_portal_screen.dart';
 import 'screens/pregrt/pregrt_screen.dart';
 import 'screens/products/products_screen.dart';
@@ -112,7 +111,7 @@ class SarvoocchApp extends StatelessWidget {
     final routeBuilders = <String, WidgetBuilder>{
       '/': (_) => const SplashScreen(),
       '/login': (_) => const LoginScreen(),
-      '/setup': (_) => const InitialSetupScreen(),
+      '/setup': (_) => const LoginScreen(),
       '/dashboard': (_) => const DashboardScreen(),
       '/portal': (_) => const CustomerPortalScreen(),
       '/crm': (_) => const CrmListScreen(),

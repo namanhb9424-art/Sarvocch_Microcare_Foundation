@@ -933,25 +933,85 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '4 · DOCUMENTS DEPOSITED / जमा दस्तावेज़ (Tick min. 2)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textSecondary,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '4 · DOCUMENTS DEPOSITED / जमा दस्तावेज़',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _selectedDocs.length >= 2
+                                ? AppTheme.successLight
+                                : AppTheme.warningLight,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_selectedDocs.length} selected (min 2)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: _selectedDocs.length >= 2
+                                  ? AppTheme.tealDark
+                                  : Colors.orange.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Wrap(
-                      spacing: 12,
-                      runSpacing: 6,
+                      spacing: 10,
+                      runSpacing: 8,
                       children: _docOptions.entries.map((e) {
                         final isChecked = _selectedDocs.contains(e.key);
                         return FilterChip(
                           selected: isChecked,
+                          showCheckmark: true,
+                          checkmarkColor: Colors.white,
+                          backgroundColor: Colors.white,
+                          selectedColor: AppTheme.tealPrimary,
+                          elevation: 0,
+                          pressElevation: 0,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 6,
+                          ),
+                          side: BorderSide(
+                            color: isChecked
+                                ? AppTheme.tealDark
+                                : const Color(0xFFCBD5E1),
+                            width: isChecked ? 1.5 : 1.2,
+                          ),
+                          avatar: isChecked
+                              ? null
+                              : const Icon(
+                                  Icons.check_box_outline_blank,
+                                  size: 16,
+                                  color: AppTheme.textSecondary,
+                                ),
                           label: Text(
                             e.value,
-                            style: const TextStyle(fontSize: 12),
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: isChecked
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                              color: isChecked
+                                  ? Colors.white
+                                  : AppTheme.textPrimary,
+                            ),
                           ),
                           onSelected: (val) {
                             setState(() {

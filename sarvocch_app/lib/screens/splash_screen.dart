@@ -62,9 +62,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    if (auth.needsInitialSetup) {
-      Navigator.pushReplacementNamed(context, '/setup');
-    } else if (auth.isAuthenticated) {
+    if (auth.isAuthenticated) {
       if (auth.currentUser?.role == 'customer') {
         Navigator.pushReplacementNamed(context, '/portal');
       } else {

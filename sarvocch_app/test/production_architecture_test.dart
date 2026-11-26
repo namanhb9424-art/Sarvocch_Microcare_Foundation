@@ -1,8 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sarvocch_app/data/database_helper.dart';
 import 'package:sarvocch_app/models/user_model.dart';
+import 'package:sarvocch_app/providers/auth_provider.dart';
+import 'package:sarvocch_app/providers/customer_provider.dart';
 import 'package:sarvocch_app/services/currency_amount.dart';
 import 'package:sarvocch_app/services/password_hash_service.dart';
 import 'package:sarvocch_app/utils/route_guard.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   group('SARVOOCCH Production Architecture & Security Tests', () {
@@ -75,6 +79,50 @@ void main() {
 
       // Null user has no access to protected routes
       expect(RouteGuard.hasAccess('/dashboard', null), isFalse);
+
+      // Field officer should reach dashboard, kyc-verify, products, attendance
+      final agentUser = UserModel(
+        id: 4,
+        username: 'agent1',
+        name: 'Ravi Field Officer',
+        role: 'field_agent',
+        branch: 'Indore - Vijay Nagar',
+        phone: '9800000004',
+      );
+      expect(RouteGuard.hasAccess('/dashboard', agentUser), isTrue);
+      expect(RouteGuard.hasAccess('/kyc-verify', agentUser), isTrue);
+      expect(RouteGuard.hasAccess('/products', agentUser), isTrue);
+      expect(RouteGuard.hasAccess('/attendance', agentUser), isTrue);
+      expect(RouteGuard.hasAccess('/whatsapp', agentUser), isTrue);
+      expect(RouteGuard.hasAccess('/settings', agentUser), isFalse);
+      expect(RouteGuard.hasAccess('/users', agentUser), isFalse);
+    });
+
+    test('Seeded operational DB prevents unauthorized admin signup and supports geofences & CRM', () async {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+      await DatabaseHelper.instance.resetDatabase();
+      final db = await DatabaseHelper.instance.database;
+
+      final auth = AuthProvider();
+      await auth.init();
+      expect(auth.needsInitialSetup, isFalse);
+
+      final branches = await db.query('branches', where: 'active = 1 AND lat IS NOT NULL AND lng IS NOT NULL AND radius_m > 0');
+      expect(branches.length, greaterThanOrEqualTo(8));
+
+      final products = await db.query('products', where: 'active = 1');
+      expect(products.length, greaterThanOrEqualTo(4));
+
+      final custProv = CustomerProvider();
+      final createdId = await custProv.createCustomer(
+        name: 'Kiran Patel',
+        phone: '+91 98260-77889',
+        address: 'Vijay Nagar, Indore',
+        branch: 'Indore - Vijay Nagar',
+        actorUserId: 1,
+      );
+      expect(createdId, isNotNull);
     });
   });
 }

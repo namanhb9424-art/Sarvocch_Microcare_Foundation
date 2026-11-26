@@ -288,13 +288,36 @@ class SyncService extends ChangeNotifier {
     return paise / 100.0;
   }
 
+  Future<void> _upsertById(
+    Transaction txn,
+    String table,
+    Map<String, Object?> values,
+  ) async {
+    final id = values['id'];
+    if (id != null) {
+      final existing = await txn.query(
+        table,
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) {
+        final updateMap = Map<String, Object?>.from(values)..remove('id');
+        await txn.update(table, updateMap, where: 'id = ?', whereArgs: [id]);
+        return;
+      }
+    }
+    await txn.insert(table, values, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
   Future<void> _applyCloudSnapshot(Database db, Map<String, dynamic> data) async {
     await db.transaction((txn) async {
       // 1. Branches
       for (final item in (data['branches'] as List? ?? [])) {
         final m = Map<String, dynamic>.from(item as Map);
         try {
-          await txn.insert('branches', {
+          await _upsertById(txn, 'branches', {
             'id': m['id'],
             'name': m['name'],
             'code': m['code'] ?? '',
@@ -305,7 +328,7 @@ class SyncService extends ChangeNotifier {
             'lng': m['lng'],
             'radius_m': m['radius_m'] ?? 2000,
             'active': m['active'] ?? 1,
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
 
@@ -315,7 +338,7 @@ class SyncService extends ChangeNotifier {
         try {
           final minAmt = _normMoney(m['min_amt'], fallback: 5000.0).clamp(1.0, 10000000.0).toDouble();
           final maxAmt = _normMoney(m['max_amt'], fallback: 50000.0).clamp(minAmt, 10000000.0).toDouble();
-          await txn.insert('products', {
+          await _upsertById(txn, 'products', {
             'id': m['id'],
             'name': m['name'],
             'min_amt': minAmt,
@@ -328,7 +351,7 @@ class SyncService extends ChangeNotifier {
             'method': m['method'] ?? 'reducing',
             'fee_pct': m['fee_pct'] ?? 1.0,
             'active': m['active'] ?? 1,
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
 
@@ -378,7 +401,7 @@ class SyncService extends ChangeNotifier {
         final m = Map<String, dynamic>.from(item as Map);
         try {
           final sal = _normMoney(m['salary'], fallback: 0.0);
-          await txn.insert('employees', {
+          await _upsertById(txn, 'employees', {
             'id': m['id'],
             'user_id': m['user_id'],
             'name': m['name'],
@@ -393,7 +416,7 @@ class SyncService extends ChangeNotifier {
             'docs': m['docs'],
             'salary': sal,
             'salary_paise': (sal * 100).round(),
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
 
@@ -403,7 +426,7 @@ class SyncService extends ChangeNotifier {
         try {
           final last4 = m['aadhaar_last4']?.toString();
           final maskedAadhaar = (last4 != null && last4.isNotEmpty) ? 'XXXX-XXXX-$last4' : null;
-          await txn.insert('customers', {
+          await _upsertById(txn, 'customers', {
             'id': m['id'],
             'name': m['name'],
             'phone': m['phone'],
@@ -418,7 +441,7 @@ class SyncService extends ChangeNotifier {
             'kyc_status': m['kyc_status'] ?? 'pending',
             'wa_verified': m['wa_verified'] ?? 0,
             'created': m['created'],
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
 
@@ -432,7 +455,7 @@ class SyncService extends ChangeNotifier {
           final coInc = _normMoney(m['co_income'], fallback: 0.0);
           final acct = m['bank_acct']?.toString() ?? '';
           final last4 = acct.length >= 4 ? acct.substring(acct.length - 4) : acct;
-          await txn.insert('kyc_forms', {
+          await _upsertById(txn, 'kyc_forms', {
             'id': m['id'],
             'customer_id': m['customer_id'],
             'created_by': m['created_by'],
@@ -487,7 +510,7 @@ class SyncService extends ChangeNotifier {
             'co_relation': m['co_relation'],
             'co_income': coInc,
             'co_income_paise': (coInc * 100).round(),
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
 
@@ -495,7 +518,7 @@ class SyncService extends ChangeNotifier {
       for (final item in (data['pregrt'] as List? ?? [])) {
         final m = Map<String, dynamic>.from(item as Map);
         try {
-          await txn.insert('pregrt', {
+          await _upsertById(txn, 'pregrt', {
             'id': m['id'],
             'branch': m['branch'],
             'center_no': m['center_no'],
@@ -515,7 +538,7 @@ class SyncService extends ChangeNotifier {
             'verified_by': m['verified_by'],
             'verified_on': m['verified_on'],
             'review_remarks': m['review_remarks'],
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
       for (final item in (data['pregrt_members'] as List? ?? [])) {
@@ -615,8 +638,7 @@ class SyncService extends ChangeNotifier {
         try {
           final prin = _normMoney(m['principal'], fallback: 10000.0);
           final emi = _normMoney(m['emi'], fallback: 1000.0);
-          final setAmt = m['settle_amount'] != null ? _normMoney(m['settle_amount']) : null;
-          await txn.insert('loans', {
+          await _upsertById(txn, 'loans', {
             'id': m['id'],
             'application_id': m['application_id'],
             'customer_id': m['customer_id'],
@@ -633,10 +655,7 @@ class SyncService extends ChangeNotifier {
             'closure_date': m['closure_date'],
             'branch': m['branch'],
             'agent_id': m['agent_id'],
-            'settled': m['settled'] ?? 0,
-            'settle_amount': setAmt,
-            'settle_amount_paise': setAmt != null ? (setAmt * 100).round() : null,
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
 
@@ -648,7 +667,7 @@ class SyncService extends ChangeNotifier {
           final prin = _normMoney(m['principal']);
           final intr = _normMoney(m['interest']);
           final bal = _normMoney(m['balance']);
-          await txn.insert('schedule', {
+          await _upsertById(txn, 'schedule', {
             'id': m['id'],
             'loan_id': m['loan_id'],
             'no': m['no'],
@@ -663,7 +682,7 @@ class SyncService extends ChangeNotifier {
             'balance_paise': (bal * 100).round(),
             'paid': m['paid'] ?? 0,
             'paid_on': m['paid_on'],
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         } catch (_) {}
       }
 

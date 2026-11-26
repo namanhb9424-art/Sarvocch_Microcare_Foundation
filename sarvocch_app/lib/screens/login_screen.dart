@@ -35,7 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       setState(() {
-        _errorMessage = 'Sign-in failed. Check your credentials or contact your administrator.';
+        _errorMessage =
+            auth.lastLoginError ??
+            'Sign-in failed. Check your credentials or contact your administrator.';
       });
     }
   }
@@ -186,6 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 6),
                           TextField(
                             controller: _usernameCtrl,
+                            textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               hintText: 'Enter username',
                               prefixIcon: Icon(Icons.person_outline, size: 20),
@@ -205,6 +208,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _passwordCtrl,
                             obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _handleLogin(),
                             decoration: InputDecoration(
                               hintText: 'Enter password',
                               prefixIcon: const Icon(
@@ -300,6 +305,39 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
 
                   const SizedBox(height: 16),
+
+                  Center(
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.help_outline, size: 17, color: AppTheme.tealPrimary),
+                      label: const Text(
+                        'Need an account? View Provisioning Policy',
+                        style: TextStyle(fontSize: 12.5, color: AppTheme.tealPrimary, fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Account Provisioning Policy'),
+                            content: const Text(
+                              'Self-registration is intentionally disabled for regulatory & data security.\n\n'
+                              '• Staff & Field Officer accounts are provisioned by your Branch Administrator under User Accounts & Access.\n'
+                              '• Borrower Portal accounts are provisioned once KYC is verified by Branch Staff.\n\n'
+                              'Please contact your Branch Manager or Head Office to receive your login credentials.',
+                              style: TextStyle(fontSize: 13.5, height: 1.4),
+                            ),
+                            actions: [
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('Understood'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
 
                   if (auth.needsAccountRecovery)
                     const Card(

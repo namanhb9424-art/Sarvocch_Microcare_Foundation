@@ -82,7 +82,10 @@ class _ApplicationsScreenState extends State<ApplicationsScreen>
           ),
         ],
       ),
-      drawer: const CustomDrawer(currentRoute: '/applications'),
+      drawer: CustomDrawer(
+        currentRoute:
+            ModalRoute.of(context)?.settings.name ?? '/applications',
+      ),
       body: Column(
         children: [
           Container(

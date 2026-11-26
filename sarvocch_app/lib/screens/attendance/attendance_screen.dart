@@ -27,7 +27,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (user.branch.isNotEmpty) {
         _selectedBranch = user.branch;
       }
-      context.read<AttendanceProvider>().fetchAttendanceData(user.id);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<AttendanceProvider>().fetchAttendanceData(user.id);
+      });
     }
   }
 
@@ -72,19 +75,26 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['success'] == true
-              ? 'Punch-in recorded inside the configured branch geofence.'
-              : (result['error'] as String? ??
-                  'Punch-in could not be recorded.')),
-          backgroundColor:
-              result['success'] == true ? AppTheme.success : Colors.orange,
+          content: Text(
+            'Punch-in recorded (${result['distance'] ?? 0}m from branch, limit ${result['radius_m'] ?? 2000}m).',
+          ),
+          backgroundColor: AppTheme.success,
         ),
       );
     } else {
+      final dist = result['distance'];
+      final lim = result['radius_m'];
+      final baseErr =
+          result['error'] as String? ?? 'Punch-in could not be recorded.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(result['error'] as String? ??
-                'Punch-in could not be recorded.')),
+          content: Text(
+            dist != null && lim != null
+                ? '$baseErr (${dist}m away, allowed ${lim}m)'
+                : baseErr,
+          ),
+          backgroundColor: Colors.orange.shade800,
+        ),
       );
     }
   }
@@ -243,8 +253,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final auth = context.watch<AuthProvider>();
     final user = auth.currentUser;
     final today = attProv.todayRecord;
+    final availableBranches = attProv.branches;
+    var activeBranchName = _selectedBranch;
+    if ((activeBranchName.isEmpty ||
+            !availableBranches.any((b) => b.name == activeBranchName)) &&
+        availableBranches.isNotEmpty) {
+      final userMatch = availableBranches.where((b) => b.name == user?.branch);
+      activeBranchName = userMatch.isNotEmpty
+          ? userMatch.first.name
+          : availableBranches.first.name;
+      if (_selectedBranch != activeBranchName) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _selectedBranch = activeBranchName);
+        });
+      }
+    }
     final branchRows =
-        attProv.branches.where((branch) => branch.name == _selectedBranch);
+        availableBranches.where((branch) => branch.name == activeBranchName);
     final branch = branchRows.isEmpty ? null : branchRows.first;
     final geofenceConfigured = branch?.lat != null &&
         branch?.lng != null &&
@@ -310,18 +335,56 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     const SizedBox(height: 14),
 
                     // Branch & Geofence GPS
+                    if (user?.role == 'admin' && availableBranches.isNotEmpty) ...[
+                      DropdownButtonFormField<String>(
+                        value: availableBranches.any((b) => b.name == activeBranchName)
+                            ? activeBranchName
+                            : null,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Select Assigned Branch for Punch-In',
+                          prefixIcon: Icon(Icons.business_outlined, size: 18),
+                          isDense: true,
+                        ),
+                        items: availableBranches.map((b) {
+                          final geoOk = b.lat != null && b.lng != null && b.radiusM > 0;
+                          return DropdownMenuItem(
+                            value: b.name,
+                            child: Text(
+                              '${b.name} (${geoOk ? '${b.radiusM}m' : 'No GPS'})',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedBranch = val);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Row(
                       children: [
-                        const Icon(Icons.location_on,
-                            color: AppTheme.tealPrimary, size: 20),
+                        Icon(
+                          Icons.location_on,
+                          color: geofenceConfigured
+                              ? AppTheme.tealPrimary
+                              : Colors.orange.shade700,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Branch: ${_selectedBranch.isEmpty ? 'Not assigned' : _selectedBranch}\nGeofence: ${geofenceConfigured ? '${branch!.radiusM}m' : 'Not configured'}',
+                            'Branch: ${activeBranchName.isEmpty ? 'Not assigned' : activeBranchName}\nGeofence: ${geofenceConfigured ? '${branch!.radiusM}m (${branch.lat!.toStringAsFixed(4)}, ${branch.lng!.toStringAsFixed(4)})' : 'Not configured'}',
                             style: const TextStyle(
                                 fontSize: 12.5, fontWeight: FontWeight.w600),
                           ),
                         ),
+                        if (!geofenceConfigured && user?.role == 'admin')
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pushNamed(context, '/branches'),
+                            child: const Text('Configure'),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 16),

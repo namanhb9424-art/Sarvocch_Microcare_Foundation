@@ -112,10 +112,16 @@ class AppTheme {
         labelStyle: const TextStyle(color: textSecondary, fontSize: 14),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: background,
-        side: const BorderSide(color: border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        backgroundColor: Colors.white,
+        selectedColor: tealSurface,
+        checkmarkColor: tealPrimary,
+        side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        labelStyle: const TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+        ),
       ),
     );
   }

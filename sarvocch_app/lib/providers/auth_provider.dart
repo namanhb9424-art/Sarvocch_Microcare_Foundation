@@ -19,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   bool _needsInitialSetup = false;
   bool _needsAccountRecovery = false;
   String? _initializationError;
+  String? _lastLoginError;
 
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
@@ -26,6 +27,7 @@ class AuthProvider extends ChangeNotifier {
   bool get needsInitialSetup => _needsInitialSetup;
   bool get needsAccountRecovery => _needsAccountRecovery;
   String? get initializationError => _initializationError;
+  String? get lastLoginError => _lastLoginError;
 
   Future<void> init() async {
     _isLoading = true;
@@ -40,17 +42,10 @@ class AuthProvider extends ChangeNotifier {
         WHERE u.auth_status = 'active' AND u.password_hash IS NOT NULL
         ORDER BY u.id ASC
       ''');
-      final setupRows = await db.query(
-        'app_meta',
-        columns: ['value'],
-        where: 'key = ?',
-        whereArgs: ['initial_setup_completed'],
-        limit: 1,
-      );
-      final setupCompleted =
-          setupRows.isNotEmpty && setupRows.first['value'] == '1';
-      _needsInitialSetup = results.isEmpty && !setupCompleted;
-      _needsAccountRecovery = results.isEmpty && setupCompleted;
+      // Self-service unauthenticated admin signup is disabled (BS-001 security).
+      // All accounts are seeded or provisioned via authorized administrators / cloud login.
+      _needsInitialSetup = false;
+      _needsAccountRecovery = results.isEmpty;
     } catch (_) {
       _initializationError = 'The local database could not be opened securely.';
       debugPrint('Unable to initialize local authentication.');
@@ -62,8 +57,15 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> login(String username, String password) async {
     _isLoading = true;
+    _lastLoginError = null;
     notifyListeners();
     final trimmedUsername = username.trim();
+    if (trimmedUsername.isEmpty || password.isEmpty) {
+      _lastLoginError = 'Enter both username and password.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
     try {
       final db = await DatabaseHelper.instance.database;
 
@@ -109,6 +111,17 @@ class AuthProvider extends ChangeNotifier {
           }
         } else if (resp.statusCode == 401 || resp.statusCode == 423 || resp.statusCode == 429) {
           // Explicit rejection from cloud authoritative server
+          try {
+            final errParsed = jsonDecode(body) as Map<String, dynamic>? ?? {};
+            if (errParsed['message'] is String && (errParsed['message'] as String).isNotEmpty) {
+              _lastLoginError = errParsed['message'] as String;
+            }
+          } catch (_) {}
+          _lastLoginError ??= resp.statusCode == 423
+              ? 'Account temporarily locked due to repeated failed attempts.'
+              : resp.statusCode == 429
+              ? 'Too many login attempts. Please wait 10 minutes.'
+              : 'Sign-in failed. Check your credentials or contact your administrator.';
           await PasswordHashService.performDummyVerificationWork(password);
           return false;
         }
@@ -152,6 +165,7 @@ class AuthProvider extends ChangeNotifier {
           await PasswordHashService.performDummyVerificationWork(password);
         }
         if (!valid) {
+          _lastLoginError = 'Invalid username or password.';
           await _recordFailedLogin(db, row);
           return false;
         }

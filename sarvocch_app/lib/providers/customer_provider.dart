@@ -15,10 +15,12 @@ class CustomerProvider extends ChangeNotifier {
 
   List<CustomerModel> _customers = [];
   bool _isLoading = false;
+  String? _lastError;
   int _sessionGeneration = 0;
 
   List<CustomerModel> get customers => _customers;
   bool get isLoading => _isLoading;
+  String? get lastError => _lastError;
 
   void clearSessionData() {
     _sessionGeneration++;
@@ -327,6 +329,7 @@ class CustomerProvider extends ChangeNotifier {
     required String branch,
     required int actorUserId,
   }) async {
+    _lastError = null;
     try {
       final db = await DatabaseHelper.instance.database;
       final actors = await db.query(
@@ -337,19 +340,44 @@ class CustomerProvider extends ChangeNotifier {
       );
       if (actors.isEmpty ||
           !{'admin', 'manager', 'field_agent'}.contains(actors.first['role'])) {
+        _lastError = 'Your account does not have permission to create leads.';
         return null;
       }
       final actor = actors.first;
       final actorRole = actor['role'] as String;
       final actorBranch = (actor['branch'] as String?)?.trim() ?? '';
       final requestedBranch = branch.trim();
-      if (name.trim().isEmpty ||
-          address.trim().isEmpty ||
-          !RegExp(r'^\d{10}$').hasMatch(phone.trim()) ||
-          requestedBranch.isEmpty ||
-          (actorRole != 'admin' && requestedBranch != actorBranch)) {
+
+      var normalizedDigits = phone.replaceAll(RegExp(r'\D'), '');
+      if (normalizedDigits.length == 12 && normalizedDigits.startsWith('91')) {
+        normalizedDigits = normalizedDigits.substring(2);
+      } else if (normalizedDigits.length == 11 &&
+          normalizedDigits.startsWith('0')) {
+        normalizedDigits = normalizedDigits.substring(1);
+      }
+
+      if (name.trim().isEmpty) {
+        _lastError = 'Enter the customer full name.';
         return null;
       }
+      if (!RegExp(r'^[6-9]\d{9}$').hasMatch(normalizedDigits) &&
+          !RegExp(r'^\d{10}$').hasMatch(normalizedDigits)) {
+        _lastError = 'Enter a valid 10-digit mobile number.';
+        return null;
+      }
+      if (address.trim().isEmpty) {
+        _lastError = 'Enter village or address details.';
+        return null;
+      }
+      if (requestedBranch.isEmpty) {
+        _lastError = 'Please select a branch office.';
+        return null;
+      }
+      if (actorRole != 'admin' && requestedBranch != actorBranch) {
+        _lastError = 'Customer branch must match your assigned branch ($actorBranch).';
+        return null;
+      }
+
       final nowIso = DateTime.now().toIso8601String().substring(0, 19);
       late int id;
       await db.transaction((txn) async {
@@ -381,22 +409,27 @@ class CustomerProvider extends ChangeNotifier {
           limit: 1,
         );
         if (branches.isEmpty) {
-          throw StateError('Selected branch is not active.');
+          throw StateError('Selected branch "$requestedBranch" is not active.');
         }
         final duplicatePhones = await txn.query(
           'customers',
           columns: ['phone'],
         );
         if (duplicatePhones.any(
-          (row) =>
-              (row['phone'] as String? ?? '').replaceAll(RegExp(r'\D'), '') ==
-              phone.trim(),
+          (row) {
+            var existingDigits =
+                (row['phone'] as String? ?? '').replaceAll(RegExp(r'\D'), '');
+            if (existingDigits.length == 12 && existingDigits.startsWith('91')) {
+              existingDigits = existingDigits.substring(2);
+            }
+            return existingDigits == normalizedDigits;
+          },
         )) {
-          throw StateError('This mobile number is already registered.');
+          throw StateError('This mobile number ($normalizedDigits) is already registered.');
         }
         id = await txn.insert('customers', {
           'name': name.trim(),
-          'phone': phone.trim(),
+          'phone': normalizedDigits,
           'dob': '',
           'address': address.trim(),
           'branch': requestedBranch,
@@ -421,10 +454,10 @@ class CustomerProvider extends ChangeNotifier {
       await SyncService().enqueueAction(
         userId: actorUserId,
         action: 'customer_created',
-        operationId: 'cust_${id}_${phone.trim()}',
+        operationId: 'cust_${id}_$normalizedDigits',
         payload: {
           'name': name.trim(),
-          'phone': phone.trim(),
+          'phone': normalizedDigits,
           'address': address.trim(),
           'branch': requestedBranch,
           'stage': 'lead',
@@ -434,7 +467,12 @@ class CustomerProvider extends ChangeNotifier {
 
       await fetchCustomers(actorUserId: actorUserId);
       return id;
+    } on StateError catch (e) {
+      _lastError = e.message;
+      debugPrint('Customer record could not be created: ${e.message}');
+      return null;
     } catch (_) {
+      _lastError = 'Customer was not saved. Check required details and branch access.';
       debugPrint('Customer record could not be created.');
       return null;
     }
@@ -515,7 +553,14 @@ class CustomerProvider extends ChangeNotifier {
                   coIncome < 0 ||
                   !CurrencyAmount.hasPaisePrecision(coIncome))) ||
           (otherLoans != null && otherLoans < 0) ||
-          !{'husband', 'father'}.contains(guardianType) ||
+          !{
+            'husband',
+            'father',
+            'mother',
+            'spouse',
+            'guardian',
+            'other',
+          }.contains(guardianType) ||
           guardianName.trim().isEmpty ||
           name.trim().isEmpty ||
           !RegExp(r'^\+?[0-9\s()-]{10,20}$').hasMatch(phone.trim()) ||
@@ -1023,5 +1068,184 @@ class CustomerProvider extends ChangeNotifier {
     if (!await _canAccessCustomer(customerId, actorUserId)) return false;
     // Development-only UI exercise. It never changes verification state.
     return kDebugMode && otp == '123456';
+  }
+
+  Future<bool> sendWhatsAppNotice({
+    required int customerId,
+    required int actorUserId,
+    required String message,
+  }) async {
+    final cleanMessage = message.trim();
+    if (cleanMessage.isEmpty) return false;
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final nowIso = DateTime.now().toIso8601String().substring(0, 19);
+      String customerPhone = '';
+      String customerBranch = '';
+      final ok = await db.transaction<bool>((txn) async {
+        final actors = await txn.query(
+          'users',
+          columns: ['name', 'role', 'branch', 'auth_status'],
+          where: 'id = ?',
+          whereArgs: [actorUserId],
+          limit: 1,
+        );
+        final customers = await txn.query(
+          'customers',
+          columns: ['phone', 'branch', 'agent_id'],
+          where: 'id = ?',
+          whereArgs: [customerId],
+          limit: 1,
+        );
+        if (actors.isEmpty ||
+            customers.isEmpty ||
+            actors.first['auth_status'] != 'active') {
+          return false;
+        }
+        final role = actors.first['role'] as String? ?? '';
+        final actorBranch = (actors.first['branch'] as String? ?? '').trim();
+        customerBranch = (customers.first['branch'] as String? ?? '').trim();
+        customerPhone = (customers.first['phone'] as String? ?? '').trim();
+        final inScope =
+            role == 'admin' ||
+            ((role == 'manager' || role == 'underwriter') &&
+                actorBranch.isNotEmpty &&
+                actorBranch == customerBranch) ||
+            (role == 'field_agent' &&
+                customers.first['agent_id'] == actorUserId &&
+                actorBranch.isNotEmpty &&
+                actorBranch == customerBranch);
+        if (!inScope) return false;
+
+        await txn.insert('comm_logs', {
+          'customer_id': customerId,
+          'channel': 'WhatsApp',
+          'note': cleanMessage,
+          'by_name': actors.first['name'],
+          'at': nowIso,
+        });
+        await txn.insert('audit_log', {
+          'operation_id': const Uuid().v4(),
+          'entity_type': 'customer',
+          'entity_id': customerId,
+          'action': 'whatsapp_notified',
+          'actor_user_id': actorUserId,
+          'actor_role': role,
+          'actor_name': actors.first['name'],
+          'occurred_at': nowIso,
+          'details': jsonEncode({'channel': 'WhatsApp'}),
+        });
+        return true;
+      });
+      if (!ok) return false;
+      await SyncService().enqueueAction(
+        userId: actorUserId,
+        action: 'whatsapp_notified',
+        operationId: 'wa_msg_${customerId}_${DateTime.now().millisecondsSinceEpoch}',
+        payload: {
+          'customer_id': customerId,
+          'phone': customerPhone,
+          'branch': customerBranch,
+          'message': cleanMessage,
+        },
+      );
+      SyncService().triggerFullSync(userId: actorUserId);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> confirmWhatsAppVerified({
+    required int customerId,
+    required int actorUserId,
+  }) async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final nowIso = DateTime.now().toIso8601String().substring(0, 19);
+      String customerPhone = '';
+      String customerBranch = '';
+      final ok = await db.transaction<bool>((txn) async {
+        final actors = await txn.query(
+          'users',
+          columns: ['name', 'role', 'branch', 'auth_status'],
+          where: 'id = ?',
+          whereArgs: [actorUserId],
+          limit: 1,
+        );
+        final customers = await txn.query(
+          'customers',
+          columns: ['phone', 'branch', 'agent_id'],
+          where: 'id = ?',
+          whereArgs: [customerId],
+          limit: 1,
+        );
+        if (actors.isEmpty ||
+            customers.isEmpty ||
+            actors.first['auth_status'] != 'active') {
+          return false;
+        }
+        final role = actors.first['role'] as String? ?? '';
+        if (!{'admin', 'manager', 'underwriter', 'field_agent'}.contains(role)) {
+          return false;
+        }
+        final actorBranch = (actors.first['branch'] as String? ?? '').trim();
+        customerBranch = (customers.first['branch'] as String? ?? '').trim();
+        customerPhone = (customers.first['phone'] as String? ?? '').trim();
+        final inScope =
+            role == 'admin' ||
+            ((role == 'manager' || role == 'underwriter') &&
+                actorBranch.isNotEmpty &&
+                actorBranch == customerBranch) ||
+            (role == 'field_agent' &&
+                customers.first['agent_id'] == actorUserId &&
+                actorBranch.isNotEmpty &&
+                actorBranch == customerBranch);
+        if (!inScope) return false;
+
+        await txn.update(
+          'customers',
+          {'wa_verified': 1},
+          where: 'id = ?',
+          whereArgs: [customerId],
+        );
+        await txn.insert('comm_logs', {
+          'customer_id': customerId,
+          'channel': 'WhatsApp',
+          'note': 'WhatsApp / Mobile contact confirmed by ${actors.first['name']}',
+          'by_name': actors.first['name'],
+          'at': nowIso,
+        });
+        await txn.insert('audit_log', {
+          'operation_id': const Uuid().v4(),
+          'entity_type': 'customer',
+          'entity_id': customerId,
+          'action': 'whatsapp_verified',
+          'actor_user_id': actorUserId,
+          'actor_role': role,
+          'actor_name': actors.first['name'],
+          'occurred_at': nowIso,
+          'details': jsonEncode({'phone': customerPhone}),
+        });
+        return true;
+      });
+      if (!ok) return false;
+      await SyncService().enqueueAction(
+        userId: actorUserId,
+        action: 'whatsapp_verified',
+        operationId: 'wa_ver_${customerId}_${DateTime.now().millisecondsSinceEpoch}',
+        payload: {
+          'customer_id': customerId,
+          'phone': customerPhone,
+          'branch': customerBranch,
+        },
+      );
+      SyncService().triggerFullSync(userId: actorUserId);
+      await fetchCustomers(actorUserId: actorUserId);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

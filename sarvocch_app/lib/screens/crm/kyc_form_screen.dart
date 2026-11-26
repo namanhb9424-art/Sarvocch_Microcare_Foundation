@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/database_helper.dart';
 import '../../models/customer_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
@@ -61,6 +62,9 @@ class _KycFormScreenState extends State<KycFormScreen> {
   bool _isSavingKyc = false;
   int _currentStep = 0;
   int? _selectedCustomerId;
+  bool _createNewCustomer = false;
+  List<String> _branchNames = [];
+  String _selectedNewBranch = '';
 
   // Step 0: Applicant & Centre Details
   final _formDateCtrl = TextEditingController(
@@ -181,15 +185,46 @@ class _KycFormScreenState extends State<KycFormScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      final user = auth.currentUser;
+      final custProv = context.read<CustomerProvider>();
+      if (user != null && custProv.customers.isEmpty && !custProv.isLoading) {
+        await custProv.fetchCustomers(actorUserId: user.id);
+      }
+      if (!mounted) return;
+      final db = await DatabaseHelper.instance.database;
+      final bRows = await db.query(
+        'branches',
+        columns: ['name'],
+        where: 'active = 1',
+        orderBy: 'id ASC',
+      );
+      if (!mounted) return;
+      final branchList = bRows
+          .map((r) => r['name'] as String)
+          .where((n) => n.isNotEmpty)
+          .toList();
       final argCustomerId = ModalRoute.of(context)?.settings.arguments as int?;
       final customers = _visibleCustomers(
         context.read<CustomerProvider>().customers,
-        context.read<AuthProvider>().currentUser,
+        user,
       );
+      setState(() {
+        _branchNames = branchList;
+        _selectedNewBranch = (user != null && branchList.contains(user.branch))
+            ? user.branch
+            : (branchList.isNotEmpty ? branchList.first : '');
+        if (customers.isEmpty && argCustomerId == null) {
+          _createNewCustomer = true;
+        }
+      });
       if (argCustomerId != null) {
         final matches = customers.where((c) => c.id == argCustomerId);
-        if (matches.isNotEmpty && mounted) _loadCustomer(matches.first);
+        if (matches.isNotEmpty && mounted) {
+          await _loadCustomer(matches.first);
+        }
       }
     });
   }
@@ -323,7 +358,14 @@ class _KycFormScreenState extends State<KycFormScreen> {
     setText(_husbandDobCtrl, 'h_dob');
     setText(_husbandAddressCtrl, 'h_address');
 
-    _guardianType = ['husband', 'father'].contains(form['guardian_type'])
+    _guardianType = [
+      'husband',
+      'father',
+      'mother',
+      'spouse',
+      'guardian',
+      'other',
+    ].contains(form['guardian_type'])
         ? form['guardian_type'] as String
         : '';
     _education = _educationOpts.contains(form['education'])
@@ -541,42 +583,96 @@ class _KycFormScreenState extends State<KycFormScreen> {
     );
   }
 
+  String? _validateStep(int step) {
+    if (step == 0) {
+      if (!_createNewCustomer && _selectedCustomerId == null) {
+        return 'Select a customer lead or choose "+ Create New Customer" above.';
+      }
+      if (_nameCtrl.text.trim().isEmpty) {
+        return 'Enter applicant full name.';
+      }
+      final phoneDigits = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
+      if (phoneDigits.length < 10 || phoneDigits.length > 12) {
+        return 'Enter a valid 10-digit mobile number.';
+      }
+      final parsedDob = DateTime.tryParse(_dobCtrl.text.trim());
+      final age = _calcAge(_dobCtrl.text.trim());
+      if (parsedDob == null || age == null || age < 18 || age > 65) {
+        return 'Enter valid Date of Birth (YYYY-MM-DD, age 18-65).';
+      }
+      if (_guardianType.isEmpty || _guardianNameCtrl.text.trim().isEmpty) {
+        return 'Select guardian relation and enter guardian name.';
+      }
+      if (_education.isEmpty || _religion.isEmpty || _category.isEmpty) {
+        return 'Select education, religion and category.';
+      }
+    } else if (step == 1) {
+      if (_villageCtrl.text.trim().isEmpty ||
+          _districtCtrl.text.trim().isEmpty ||
+          _state.isEmpty ||
+          !RegExp(r'^[0-9]{6}$').hasMatch(_pincodeCtrl.text.trim())) {
+        return 'Complete village, district, state and 6-digit PIN code.';
+      }
+    } else if (step == 2) {
+      if (_houseType.isEmpty ||
+          _povertyLine.isEmpty ||
+          _repayFreq.isEmpty ||
+          (double.tryParse(_annualIncomeCtrl.text) ?? 0) <= 0) {
+        return 'Select house type, poverty line, repayment frequency and annual income.';
+      }
+    }
+    return null;
+  }
+
+  Future<void> _pickDobDate() async {
+    final now = DateTime.now();
+    final initial =
+        DateTime.tryParse(_dobCtrl.text.trim()) ??
+        DateTime(now.year - 28, now.month, now.day);
+    final first = DateTime(now.year - 65, 1, 1);
+    final last = DateTime(now.year - 18, now.month, now.day);
+    final clampedInitial = initial.isBefore(first)
+        ? first
+        : (initial.isAfter(last) ? last : initial);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: clampedInitial,
+      firstDate: first,
+      lastDate: last,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _dobCtrl.text = DateFormat('yyyy-MM-dd').format(picked);
+      });
+    }
+  }
+
   Future<void> _submitKycForm() async {
     if (_isSavingKyc) return;
-    if (_selectedCustomerId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a customer lead')),
-      );
-      return;
-    }
-
-    if (_nameCtrl.text.trim().isEmpty ||
-        !RegExp(r'^\+?[0-9\s()-]{10,20}$').hasMatch(_phoneCtrl.text.trim()) ||
-        DateTime.tryParse(_dobCtrl.text.trim()) == null ||
-        (_calcAge(_dobCtrl.text.trim()) ?? 0) < 18 ||
-        (_calcAge(_dobCtrl.text.trim()) ?? 100) > 65 ||
-        _phoneCtrl.text.trim().isEmpty ||
-        _dobCtrl.text.trim().isEmpty ||
-        _guardianType.isEmpty ||
-        _education.isEmpty ||
-        _religion.isEmpty ||
-        _category.isEmpty ||
-        _state.isEmpty ||
-        _houseType.isEmpty ||
-        _povertyLine.isEmpty ||
-        _repayFreq.isEmpty ||
-        (double.tryParse(_annualIncomeCtrl.text) ?? 0) <= 0 ||
-        _villageCtrl.text.trim().isEmpty ||
-        _districtCtrl.text.trim().isEmpty ||
-        !RegExp(r'^[0-9]{6}$').hasMatch(_pincodeCtrl.text.trim())) {
+    if (!_createNewCustomer && _selectedCustomerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Complete the required applicant details before saving',
+            'Please select a customer lead or enable "Create New Customer".',
           ),
         ),
       );
       return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    final currentUser = auth.currentUser;
+    if (currentUser == null) return;
+
+    for (var s = 0; s <= 2; s++) {
+      final err = _validateStep(s);
+      if (err != null) {
+        setState(() => _currentStep = s);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), backgroundColor: AppTheme.danger),
+        );
+        return;
+      }
     }
 
     if (!_declarationAccepted) {
@@ -597,16 +693,53 @@ class _KycFormScreenState extends State<KycFormScreen> {
       return;
     }
 
-    final auth = context.read<AuthProvider>();
-    final currentUser = auth.currentUser;
-    if (currentUser == null) return;
     final familyData = _familyMembers.map((m) => m.toMap()).toList();
+    final custProv = context.read<CustomerProvider>();
 
     setState(() => _isSavingKyc = true);
     var success = false;
     try {
-      success = await context.read<CustomerProvider>().saveKycForm(
-        customerId: _selectedCustomerId!,
+      var targetCustomerId = _selectedCustomerId;
+      if (_createNewCustomer || targetCustomerId == null) {
+        final fullAddr = [
+          _houseNoCtrl.text.trim(),
+          _villageCtrl.text.trim(),
+          _districtCtrl.text.trim(),
+        ].where((p) => p.isNotEmpty).join(', ');
+        final branchForNew = currentUser.role == 'admin'
+            ? (_selectedNewBranch.isNotEmpty
+                  ? _selectedNewBranch
+                  : (currentUser.branch.isNotEmpty
+                        ? currentUser.branch
+                        : 'Indore - Vijay Nagar'))
+            : currentUser.branch;
+        targetCustomerId = await custProv.createCustomer(
+          name: _nameCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          address: fullAddr.isNotEmpty ? fullAddr : _villageCtrl.text.trim(),
+          branch: branchForNew,
+          actorUserId: currentUser.id,
+        );
+        if (targetCustomerId == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  custProv.lastError ??
+                      'Could not create new customer lead. Check details and phone number.',
+                ),
+                backgroundColor: AppTheme.danger,
+              ),
+            );
+          }
+          return;
+        }
+        _selectedCustomerId = targetCustomerId;
+        _createNewCustomer = false;
+      }
+
+      success = await custProv.saveKycForm(
+        customerId: targetCustomerId,
         agentId: currentUser.id,
         name: _nameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
@@ -789,6 +922,13 @@ class _KycFormScreenState extends State<KycFormScreen> {
         onStepContinue: () {
           if (_isSavingKyc) return;
           if (_currentStep < 3) {
+            final err = _validateStep(_currentStep);
+            if (err != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(err), backgroundColor: Colors.orange.shade800),
+              );
+              return;
+            }
             setState(() => _currentStep += 1);
           } else {
             _submitKycForm();
@@ -837,37 +977,98 @@ class _KycFormScreenState extends State<KycFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Select Customer Lead (ग्राहक चुनें) *',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: _selectedCustomerId,
-                    decoration: const InputDecoration(
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('Existing Lead', style: TextStyle(fontSize: 12)),
+                          selected: !_createNewCustomer,
+                          onSelected: _isSavingKyc
+                              ? null
+                              : (_) => setState(() => _createNewCustomer = false),
+                        ),
                       ),
-                    ),
-                    items: customers.map((c) {
-                      return DropdownMenuItem(
-                        value: c.id,
-                        child: Text('${c.name} (${c.phone}) - ${c.branch}'),
-                      );
-                    }).toList(),
-                    onChanged: _isSavingKyc
-                        ? null
-                        : (val) {
-                            if (val == null) return;
-                            final matches = customers.where(
-                              (customer) => customer.id == val,
-                            );
-                            if (matches.isNotEmpty) {
-                              _loadCustomer(matches.first);
-                            }
-                          },
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('+ Create New Customer', style: TextStyle(fontSize: 12)),
+                          selected: _createNewCustomer,
+                          onSelected: _isSavingKyc
+                              ? null
+                              : (_) {
+                                  setState(() {
+                                    _createNewCustomer = true;
+                                    _selectedCustomerId = null;
+                                  });
+                                },
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 12),
+                  if (!_createNewCustomer) ...[
+                    const Text(
+                      'Select Customer Lead (ग्राहक चुनें) *',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<int>(
+                      value: customers.any((c) => c.id == _selectedCustomerId)
+                          ? _selectedCustomerId
+                          : null,
+                      isExpanded: true,
+                      hint: Text(
+                        customers.isEmpty
+                            ? 'No existing leads — switch to Create New Customer'
+                            : 'Select a customer lead',
+                      ),
+                      decoration: const InputDecoration(
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      items: customers.map((c) {
+                        return DropdownMenuItem(
+                          value: c.id,
+                          child: Text(
+                            '${c.name} (${c.phone}) - ${c.branch}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: _isSavingKyc
+                          ? null
+                          : (val) {
+                              if (val == null) return;
+                              final matches = customers.where(
+                                (customer) => customer.id == val,
+                              );
+                              if (matches.isNotEmpty) {
+                                _loadCustomer(matches.first);
+                              }
+                            },
+                    ),
+                  ] else if (context.read<AuthProvider>().currentUser?.role == 'admin' &&
+                      _branchNames.isNotEmpty) ...[
+                    const Text(
+                      'Assign Branch for New Customer *',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: _branchNames.contains(_selectedNewBranch)
+                          ? _selectedNewBranch
+                          : _branchNames.first,
+                      isExpanded: true,
+                      items: _branchNames
+                          .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _selectedNewBranch = val);
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   Row(
                     children: [
@@ -959,67 +1160,110 @@ class _KycFormScreenState extends State<KycFormScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Date of Birth (जन्म तिथि) *',
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Date of Birth (जन्म तिथि) *',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _calcAge(_dobCtrl.text) != null
+                                  ? AppTheme.tealSurface
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              _calcAge(_dobCtrl.text) == null
+                                  ? 'Age: --'
+                                  : 'Age: ${_calcAge(_dobCtrl.text)} yrs',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12.5,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: _calcAge(_dobCtrl.text) != null
+                                    ? AppTheme.tealDark
+                                    : AppTheme.textSecondary,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller: _dobCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'YYYY-MM-DD',
-                                suffixText: _calcAge(_dobCtrl.text) == null
-                                    ? 'Age: not recorded'
-                                    : 'Age: ${_calcAge(_dobCtrl.text)}',
-                              ),
-                              onChanged: (_) => setState(() {}),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _dobCtrl,
+                        scrollPadding: const EdgeInsets.only(bottom: 140),
+                        keyboardType: TextInputType.datetime,
+                        decoration: InputDecoration(
+                          hintText: 'YYYY-MM-DD (e.g. 1994-05-15)',
+                          prefixIcon: const Icon(Icons.cake_outlined, size: 19),
+                          suffixIcon: IconButton(
+                            tooltip: 'Pick Date of Birth',
+                            icon: const Icon(Icons.calendar_today, size: 18),
+                            onPressed: _pickDobDate,
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Relation of Guardian (अभिभावक से संबंध) *',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12.5,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Relation of Guardian',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12.5,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            DropdownButtonFormField<String>(
-                              value: _guardianType,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: '',
-                                  child: Text('Select relation'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'husband',
-                                  child: Text('Husband (पति)'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'father',
-                                  child: Text('Father (पिता)'),
-                                ),
-                              ],
-                              onChanged: (val) =>
-                                  setState(() => _guardianType = val!),
-                            ),
-                          ],
-                        ),
+                      const SizedBox(height: 4),
+                      DropdownButtonFormField<String>(
+                        value: _guardianType,
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(
+                            value: '',
+                            child: Text('Select guardian relationship'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'husband',
+                            child: Text('Husband (पति)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'father',
+                            child: Text('Father (पिता)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'mother',
+                            child: Text('Mother (माता)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'spouse',
+                            child: Text('Spouse (जीवनसाथी)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'guardian',
+                            child: Text('Legal Guardian (अभिभावक)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'other',
+                            child: Text('Other Relative (अन्य)'),
+                          ),
+                        ],
+                        onChanged: (val) =>
+                            setState(() => _guardianType = val ?? ''),
                       ),
                     ],
                   ),

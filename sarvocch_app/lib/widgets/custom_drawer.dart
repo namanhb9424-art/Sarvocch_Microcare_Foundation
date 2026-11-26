@@ -9,10 +9,29 @@ class CustomDrawer extends StatelessWidget {
 
   const CustomDrawer({super.key, required this.currentRoute});
 
+  String _normalizeRoute(String route) {
+    switch (route) {
+      case '/kyc_form':
+        return '/kyc-form';
+      case '/apply_loan':
+        return '/apply';
+      case '/kyc':
+        return '/kyc-verify';
+      default:
+        return route;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.currentUser;
+    final modalRouteName = ModalRoute.of(context)?.settings.name;
+    final effectiveRoute = _normalizeRoute(
+      (modalRouteName != null && modalRouteName.isNotEmpty)
+          ? modalRouteName
+          : currentRoute,
+    );
 
     if (user == null) return const SizedBox.shrink();
 
@@ -260,7 +279,9 @@ class CustomDrawer extends StatelessWidget {
                 itemCount: allNavItems.length,
                 itemBuilder: (context, index) {
                   final item = allNavItems[index];
-                  final isActive = currentRoute == item.route;
+                  final isActive = effectiveRoute == item.route;
+                  final homeRoute =
+                      user.role == 'customer' ? '/portal' : '/dashboard';
 
                   return Container(
                     margin: const EdgeInsets.symmetric(
@@ -271,18 +292,20 @@ class CustomDrawer extends StatelessWidget {
                       color: isActive
                           ? AppTheme.tealSurface
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(8),
                       border: isActive
                           ? const Border(
                               left: BorderSide(
                                 color: AppTheme.tealPrimary,
-                                width: 3.5,
+                                width: 4,
                               ),
                             )
                           : null,
                     ),
                     child: ListTile(
                       dense: true,
+                      selected: isActive,
+                      selectedTileColor: AppTheme.tealSurface,
                       leading: Icon(
                         item.icon,
                         size: 20,
@@ -298,19 +321,36 @@ class CustomDrawer extends StatelessWidget {
                               ? FontWeight.w700
                               : FontWeight.w500,
                           color: isActive
-                              ? AppTheme.tealPrimary
+                              ? AppTheme.tealDark
                               : AppTheme.textPrimary,
                         ),
                       ),
+                      trailing: isActive
+                          ? const Icon(
+                              Icons.circle,
+                              size: 8,
+                              color: AppTheme.tealPrimary,
+                            )
+                          : null,
                       onTap: () {
                         Navigator.pop(context); // Close drawer
                         if (!isActive) {
-                          // Home screens clear the stack; all others push so back works
+                          // Home screens clear the stack cleanly; top-level drawer
+                          // modules keep only the home route underneath so Back
+                          // always returns directly to Dashboard/Portal (BS-011).
                           if (item.route == '/dashboard' ||
                               item.route == '/portal') {
-                            Navigator.pushReplacementNamed(context, item.route);
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              item.route,
+                              (_) => false,
+                            );
                           } else {
-                            Navigator.pushNamed(context, item.route);
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              item.route,
+                              (route) => route.settings.name == homeRoute,
+                            );
                           }
                         }
                       },

@@ -59,7 +59,7 @@ class AttendanceProvider extends ChangeNotifier {
       }
       final role = user['role'] as String? ?? '';
       final userBranch = user['branch'] as String? ?? '';
-      if (!{'admin', 'manager', 'field_agent'}.contains(role) ||
+      if (!{'admin', 'manager', 'underwriter', 'field_agent'}.contains(role) ||
           (role != 'admin' && userBranch.trim().isEmpty)) {
         _records = [];
         _requests = [];
@@ -162,6 +162,7 @@ class AttendanceProvider extends ChangeNotifier {
           !{
             'admin',
             'manager',
+            'underwriter',
             'field_agent',
           }.contains(actorRows.first['role']) ||
           (actorRows.first['role'] != 'admin' &&
@@ -187,6 +188,7 @@ class AttendanceProvider extends ChangeNotifier {
             !{
               'admin',
               'manager',
+              'underwriter',
               'field_agent',
             }.contains(activeActor.first['role']) ||
             (activeActor.first['role'] != 'admin' &&
@@ -343,6 +345,7 @@ class AttendanceProvider extends ChangeNotifier {
             !{
               'admin',
               'manager',
+              'underwriter',
               'field_agent',
             }.contains(actors.first['role'])) {
           return 0;

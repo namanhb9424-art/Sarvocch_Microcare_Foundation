@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/customer_provider.dart';
 import '../providers/loan_provider.dart';
 import '../services/currency_amount.dart';
+import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/custom_drawer.dart';
@@ -26,15 +27,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     decimalDigits: 2,
   );
 
+  bool _wasSyncing = false;
+
   @override
   void initState() {
     super.initState();
+    SyncService().addListener(_handleSyncUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = context.read<AuthProvider>().currentUser;
       if (user == null) return;
       context.read<LoanProvider>().fetchAll(actorUserId: user.id);
       context.read<CustomerProvider>().fetchCustomers(actorUserId: user.id);
     });
+  }
+
+  @override
+  void dispose() {
+    SyncService().removeListener(_handleSyncUpdate);
+    super.dispose();
+  }
+
+  void _handleSyncUpdate() {
+    final sync = SyncService();
+    if (_wasSyncing && !sync.isSyncing && sync.isCloudOnline && mounted) {
+      final user = context.read<AuthProvider>().currentUser;
+      if (user != null) {
+        context.read<LoanProvider>().fetchAll(actorUserId: user.id);
+        context.read<CustomerProvider>().fetchCustomers(actorUserId: user.id);
+      }
+    }
+    _wasSyncing = sync.isSyncing;
   }
 
   @override

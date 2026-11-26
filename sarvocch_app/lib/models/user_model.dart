@@ -115,6 +115,7 @@ class UserModel {
       'grievances',
     };
     const fieldAgentPerms = {
+      'dashboard',
       'crm',
       'profile',
       'kyc',
@@ -123,6 +124,7 @@ class UserModel {
       'field',
       'sync',
       'calculator',
+      'products',
       'whatsapp',
       'payments',
       'kycform',

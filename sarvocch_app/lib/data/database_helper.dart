@@ -185,6 +185,8 @@ class DatabaseHelper {
     await _retryPendingForeignKeyMigrations(db);
     await _ensureOfflineIntegrityIndexes(db);
     await _ensureRecoveryEventsTable(db);
+    await _ensureGrievancesTable(db);
+    await _ensureOperationalSeedData(db);
     await _ensureMfiReferenceTriggers(db);
     await _refreshMfiReferenceWarnings(db);
     await _refreshForeignKeyWarnings(db);
@@ -740,25 +742,8 @@ class DatabaseHelper {
     }
 
     if (oldVersion < 6 && !kDebugMode) {
-      // Legacy WhatsApp OTPs were local simulations, and the prototype seeded
-      // example branch coordinates. Clear their verification state/config so
-      // release attendance and customer records require real setup.
-      await db.update('customers', {'wa_verified': 0, 'wa_otp': null});
-      const demoGeofences = [
-        ['Indore - Vijay Nagar', 22.7533, 75.8937],
-        ['Indore - Palasia', 22.7241, 75.8839],
-        ['Bhopal - MP Nagar', 23.2332, 77.4340],
-        ['Pipariya Branch', 22.7388, 78.3563],
-        ['Bhopal Head Office', 23.2799, 77.4522],
-      ];
-      for (final geofence in demoGeofences) {
-        await db.update(
-          'branches',
-          {'lat': null, 'lng': null, 'radius_m': 0},
-          where: 'name = ? AND lat = ? AND lng = ?',
-          whereArgs: geofence,
-        );
-      }
+      // Legacy WhatsApp OTPs were local simulations; reset unverified OTP tokens.
+      await db.update('customers', {'wa_otp': null});
     }
 
     if (oldVersion < 8) {
@@ -3448,21 +3433,26 @@ class DatabaseHelper {
   }
 
   Future<void> _ensureOperationalSeedData(DatabaseExecutor db) async {
-    // 1. Ensure Branches with accurate GPS Geofence boundaries
-    final branchCountRows = await db.rawQuery('SELECT COUNT(*) as c FROM branches');
-    final branchCount = branchCountRows.first['c'] as int? ?? 0;
-    if (branchCount == 0) {
-      const branches = [
-        {'id': 1, 'name': 'Indore - Vijay Nagar', 'code': 'IND-VN', 'address': 'Scheme 54, Vijay Nagar, Indore (MP)', 'phone': '+91 91111 99101', 'head_name': 'Meera Manager', 'lat': 22.7533, 'lng': 75.8937, 'radius_m': 2000},
-        {'id': 2, 'name': 'Indore - Palasia', 'code': 'IND-PL', 'address': 'AB Road, New Palasia, Indore (MP)', 'phone': '+91 91111 99102', 'head_name': 'Palasia Hub Lead', 'lat': 22.7241, 'lng': 75.8839, 'radius_m': 2000},
-        {'id': 3, 'name': 'Bhopal - MP Nagar', 'code': 'BPL-MP', 'address': 'Zone 2, MP Nagar, Bhopal (MP)', 'phone': '+91 91111 99103', 'head_name': 'Bhopal Hub Lead', 'lat': 23.2332, 'lng': 77.4340, 'radius_m': 2000},
-        {'id': 4, 'name': 'Pipariya Branch', 'code': 'PPR', 'address': 'Station Road, Pipariya, Narmadapuram (MP)', 'phone': '+91 91111 99104', 'head_name': 'Abhinav Rai', 'lat': 22.738750, 'lng': 78.356346, 'radius_m': 2000},
-        {'id': 5, 'name': 'Bhopal Head Office', 'code': 'BPL-HO', 'address': 'Shop 10A/GF, Sagar High Street, Ayodhya Bypass, Bhopal', 'phone': '+91 91111 99101', 'head_name': 'Bandana Singh', 'lat': 23.279930, 'lng': 77.452200, 'radius_m': 2000},
-        {'id': 6, 'name': 'Indore - Rajwada', 'code': 'IND-02', 'address': 'Rajwada Square, Indore (MP)', 'phone': '+91 91111 99105', 'head_name': 'Rajwada Officer', 'lat': 22.7196, 'lng': 75.8577, 'radius_m': 2000},
-        {'id': 7, 'name': 'Ujjain - Freeganj', 'code': 'UJJ-01', 'address': 'Freeganj Tower Chowk, Ujjain (MP)', 'phone': '+91 91111 99106', 'head_name': 'Ujjain Officer', 'lat': 23.1765, 'lng': 75.7885, 'radius_m': 2000},
-        {'id': 8, 'name': 'Dewas - Station Road', 'code': 'DEW-01', 'address': 'Station Road, Dewas (MP)', 'phone': '+91 91111 99107', 'head_name': 'Dewas Officer', 'lat': 22.9676, 'lng': 76.0534, 'radius_m': 2000},
-      ];
-      for (final b in branches) {
+    // 1. Ensure Branches with accurate GPS Geofence boundaries (also backfill if upgraded from legacy DB)
+    const branches = [
+      {'id': 1, 'name': 'Indore - Vijay Nagar', 'code': 'IND-VN', 'address': 'Scheme 54, Vijay Nagar, Indore (MP)', 'phone': '+91 91111 99101', 'head_name': 'Meera Manager', 'lat': 22.7533, 'lng': 75.8937, 'radius_m': 2000},
+      {'id': 2, 'name': 'Indore - Palasia', 'code': 'IND-PL', 'address': 'AB Road, New Palasia, Indore (MP)', 'phone': '+91 91111 99102', 'head_name': 'Palasia Hub Lead', 'lat': 22.7241, 'lng': 75.8839, 'radius_m': 2000},
+      {'id': 3, 'name': 'Bhopal - MP Nagar', 'code': 'BPL-MP', 'address': 'Zone 2, MP Nagar, Bhopal (MP)', 'phone': '+91 91111 99103', 'head_name': 'Bhopal Hub Lead', 'lat': 23.2332, 'lng': 77.4340, 'radius_m': 2000},
+      {'id': 4, 'name': 'Pipariya Branch', 'code': 'PPR', 'address': 'Station Road, Pipariya, Narmadapuram (MP)', 'phone': '+91 91111 99104', 'head_name': 'Abhinav Rai', 'lat': 22.738750, 'lng': 78.356346, 'radius_m': 2000},
+      {'id': 5, 'name': 'Bhopal Head Office', 'code': 'BPL-HO', 'address': 'Shop 10A/GF, Sagar High Street, Ayodhya Bypass, Bhopal', 'phone': '+91 91111 99101', 'head_name': 'Bandana Singh', 'lat': 23.279930, 'lng': 77.452200, 'radius_m': 2000},
+      {'id': 6, 'name': 'Indore - Rajwada', 'code': 'IND-02', 'address': 'Rajwada Square, Indore (MP)', 'phone': '+91 91111 99105', 'head_name': 'Rajwada Officer', 'lat': 22.7196, 'lng': 75.8577, 'radius_m': 2000},
+      {'id': 7, 'name': 'Ujjain - Freeganj', 'code': 'UJJ-01', 'address': 'Freeganj Tower Chowk, Ujjain (MP)', 'phone': '+91 91111 99106', 'head_name': 'Ujjain Officer', 'lat': 23.1765, 'lng': 75.7885, 'radius_m': 2000},
+      {'id': 8, 'name': 'Dewas - Station Road', 'code': 'DEW-01', 'address': 'Station Road, Dewas (MP)', 'phone': '+91 91111 99107', 'head_name': 'Dewas Officer', 'lat': 22.9676, 'lng': 76.0534, 'radius_m': 2000},
+    ];
+    for (final b in branches) {
+      final existing = await db.query(
+        'branches',
+        columns: ['id', 'lat', 'lng', 'radius_m', 'active'],
+        where: 'name = ?',
+        whereArgs: [b['name']],
+        limit: 1,
+      );
+      if (existing.isEmpty) {
         await db.insert('branches', {
           'id': b['id'],
           'name': b['name'],
@@ -3475,11 +3465,29 @@ class DatabaseHelper {
           'radius_m': b['radius_m'],
           'active': 1,
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      } else {
+        final row = existing.first;
+        final needsGeo = row['lat'] == null ||
+            row['lng'] == null ||
+            ((row['radius_m'] as num?)?.toInt() ?? 0) <= 0;
+        if (needsGeo) {
+          await db.update(
+            'branches',
+            {
+              'lat': b['lat'],
+              'lng': b['lng'],
+              'radius_m': b['radius_m'],
+              'active': 1,
+            },
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+        }
       }
     }
 
     // 2. Ensure Loan Products
-    final prodRows = await db.rawQuery('SELECT COUNT(*) as c FROM products');
+    final prodRows = await db.rawQuery('SELECT COUNT(*) as c FROM products WHERE active = 1');
     if ((prodRows.first['c'] as int? ?? 0) == 0) {
       const products = [
         {'id': 1, 'name': 'Micro Business Loan', 'min_amt': 10000.0, 'max_amt': 100000.0, 'min_tenure': 6, 'max_tenure': 24, 'rate': 18.0, 'method': 'reducing', 'fee_pct': 1.0},
