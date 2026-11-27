@@ -118,7 +118,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
   }
 
   void _showPayModal(ScheduleItemModel item) {
-    String channel = 'cash';
+    final user = context.read<AuthProvider>().currentUser;
+    final isCustomer = user?.role == 'customer';
+    String channel = isCustomer ? 'upi' : 'cash';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -194,11 +196,12 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                 Wrap(
                   spacing: 8,
                   children: [
-                    ChoiceChip(
-                      label: const Text('Cash in Field'),
-                      selected: channel == 'cash',
-                      onSelected: (_) => setModalState(() => channel = 'cash'),
-                    ),
+                    if (!isCustomer)
+                      ChoiceChip(
+                        label: const Text('Cash in Field'),
+                        selected: channel == 'cash',
+                        onSelected: (_) => setModalState(() => channel = 'cash'),
+                      ),
                     ChoiceChip(
                       label: const Text('UPI / BharatQR'),
                       selected: channel == 'upi',

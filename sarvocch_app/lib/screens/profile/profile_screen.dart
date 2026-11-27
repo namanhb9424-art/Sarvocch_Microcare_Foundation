@@ -217,6 +217,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ? 'Active & Authorized'
                           : 'Suspended',
                     ),
+                    _profileRow(
+                      Icons.info_outline,
+                      'App Version',
+                      'v2.1.0 (Build 4)',
+                    ),
                   ],
                 ),
               ),

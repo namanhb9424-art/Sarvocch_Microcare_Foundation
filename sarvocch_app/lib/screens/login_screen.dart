@@ -349,6 +349,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
+
+                  const SizedBox(height: 12),
+                  const Center(
+                    child: Text(
+                      'Sarvoocch Saathi · v2.1.0+4',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

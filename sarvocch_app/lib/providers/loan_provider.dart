@@ -330,7 +330,9 @@ class LoanProvider extends ChangeNotifier {
         (u.role IN ('manager', 'underwriter')
           AND trim(u.branch) <> '' AND l.branch = u.branch) OR
         (u.role = 'field_agent' AND l.agent_id = u.id
-          AND trim(u.branch) <> '' AND l.branch = u.branch)
+          AND trim(u.branch) <> '' AND l.branch = u.branch) OR
+        (u.role = 'customer' AND u.customer_id IS NOT NULL
+          AND l.customer_id = u.customer_id)
       )
       ORDER BY s.no ASC
       ''',
@@ -355,7 +357,9 @@ class LoanProvider extends ChangeNotifier {
         (u.role IN ('manager', 'underwriter')
           AND trim(u.branch) <> '' AND l.branch = u.branch) OR
         (u.role = 'field_agent' AND l.agent_id = u.id
-          AND trim(u.branch) <> '' AND l.branch = u.branch)
+          AND trim(u.branch) <> '' AND l.branch = u.branch) OR
+        (u.role = 'customer' AND u.customer_id IS NOT NULL
+          AND l.customer_id = u.customer_id)
       )
       ORDER BY p.id DESC
       ''',
@@ -375,7 +379,7 @@ class LoanProvider extends ChangeNotifier {
     return db.transaction((txn) async {
       final actors = await txn.query(
         'users',
-        columns: ['name', 'role', 'branch', 'auth_status'],
+        columns: ['name', 'role', 'branch', 'customer_id', 'auth_status'],
         where: 'id = ?',
         whereArgs: [actorUserId],
         limit: 1,
@@ -387,8 +391,9 @@ class LoanProvider extends ChangeNotifier {
       final actor = actors.first;
       final role = actor['role'] as String? ?? '';
       final branch = (actor['branch'] as String? ?? '').trim();
-      if (!{'admin', 'manager', 'underwriter', 'field_agent'}.contains(role) ||
-          (role != 'admin' && branch.isEmpty)) {
+      final actorCustId = actor['customer_id'] as int?;
+      if (!{'admin', 'manager', 'underwriter', 'field_agent', 'customer'}.contains(role) ||
+          (!{'admin', 'customer'}.contains(role) && branch.isEmpty)) {
         return null;
       }
 
@@ -407,11 +412,12 @@ class LoanProvider extends ChangeNotifier {
         WHERE pay.id = ? AND (
           ? = 'admin' OR
           (? IN ('manager', 'underwriter') AND l.branch = ?) OR
-          (? = 'field_agent' AND l.agent_id = ? AND l.branch = ?)
+          (? = 'field_agent' AND l.agent_id = ? AND l.branch = ?) OR
+          (? = 'customer' AND ? IS NOT NULL AND l.customer_id = ?)
         )
         LIMIT 1
         ''',
-        [paymentId, role, role, branch, role, actorUserId, branch],
+        [paymentId, role, role, branch, role, actorUserId, branch, role, actorCustId, actorCustId],
       );
       if (rows.isEmpty) return null;
 
@@ -903,10 +909,11 @@ class LoanProvider extends ChangeNotifier {
       final operationId = const Uuid().v4();
       final ref = 'PAY-${operationId.substring(0, 8).toUpperCase()}';
 
+      String actorRole = '';
       await db.transaction((txn) async {
         final actors = await txn.query(
           'users',
-          columns: ['name', 'role', 'branch'],
+          columns: ['name', 'role', 'branch', 'customer_id'],
           where: "id = ? AND auth_status = 'active'",
           whereArgs: [actorUserId],
           limit: 1,
@@ -916,12 +923,13 @@ class LoanProvider extends ChangeNotifier {
               'admin',
               'manager',
               'field_agent',
+              'customer',
             }.contains(actors.first['role'])) {
           throw StateError('This account cannot record loan payments.');
         }
         final loans = await txn.query(
           'loans',
-          columns: ['status', 'branch', 'agent_id'],
+          columns: ['status', 'branch', 'agent_id', 'customer_id'],
           where: 'id = ?',
           whereArgs: [loanId],
           limit: 1,
@@ -929,9 +937,18 @@ class LoanProvider extends ChangeNotifier {
         if (loans.isEmpty || loans.first['status'] != 'active') {
           throw StateError('Loan is not active.');
         }
-        final actorRole = actors.first['role'] as String;
+        actorRole = actors.first['role'] as String;
         final loanBranch = (loans.first['branch'] as String? ?? '').trim();
-        if ((actorRole == 'field_agent' &&
+        if (actorRole == 'customer') {
+          final actorCustId = actors.first['customer_id'] as int?;
+          final loanCustId = loans.first['customer_id'] as int?;
+          if (actorCustId == null || loanCustId != actorCustId) {
+            throw StateError('Loan is outside this borrower account.');
+          }
+          if (channel.toLowerCase() == 'cash') {
+            throw StateError('Borrowers must use a digital payment channel.');
+          }
+        } else if ((actorRole == 'field_agent' &&
                 (loans.first['agent_id'] != actorUserId ||
                     (actors.first['branch'] as String? ?? '').trim().isEmpty ||
                     (actors.first['branch'] as String? ?? '').trim() !=
@@ -1034,7 +1051,11 @@ class LoanProvider extends ChangeNotifier {
       await SyncService().updatePendingCount();
       SyncService().triggerFullSync(userId: actorUserId);
 
-      await fetchAll(actorUserId: actorUserId);
+      if (actorRole == 'customer') {
+        await fetchCustomerLoans(actorUserId);
+      } else {
+        await fetchAll(actorUserId: actorUserId);
+      }
       return true;
     } catch (_) {
       debugPrint('Installment payment could not be recorded.');

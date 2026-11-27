@@ -110,7 +110,7 @@ class CustomDrawer extends StatelessWidget {
       if (user.can('payments'))
         _NavItem(
           id: 'payments',
-          label: 'Collect Repayment',
+          label: user.role == 'customer' ? 'Pay EMI' : 'Collect Repayment',
           icon: Icons.payments_outlined,
           route: '/payments',
         ),

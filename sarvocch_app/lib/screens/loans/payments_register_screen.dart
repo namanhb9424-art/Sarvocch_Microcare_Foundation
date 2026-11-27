@@ -116,10 +116,12 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
   }
 
   void _collectEmiModal(Map<String, dynamic> dueLoan) {
+    final user = context.read<AuthProvider>().currentUser;
+    final isCustomer = user?.role == 'customer';
     final schedId = dueLoan['next_sched_id'] as int?;
     if (schedId == null) return;
     final emi = CurrencyAmount.readStoredValue(dueLoan, 'emi_paise', 'emi');
-    String channel = 'cash';
+    String channel = isCustomer ? 'upi' : 'cash';
 
     showModalBottomSheet(
       context: context,
@@ -139,7 +141,7 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Collect EMI • #SMF-LN-${dueLoan['id']}',
+                  '${isCustomer ? 'Pay EMI' : 'Collect EMI'} • #SMF-LN-${dueLoan['id']}',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
                 ),
                 const SizedBox(height: 4),
@@ -162,11 +164,12 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
                 Wrap(
                   spacing: 8,
                   children: [
-                    ChoiceChip(
-                      label: const Text('Cash in Field'),
-                      selected: channel == 'cash',
-                      onSelected: (_) => setModalState(() => channel = 'cash'),
-                    ),
+                    if (!isCustomer)
+                      ChoiceChip(
+                        label: const Text('Cash in Field'),
+                        selected: channel == 'cash',
+                        onSelected: (_) => setModalState(() => channel = 'cash'),
+                      ),
                     ChoiceChip(
                       label: const Text('UPI / BharatQR'),
                       selected: channel == 'upi',
@@ -275,9 +278,13 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().currentUser;
+    final isCustomer = user?.role == 'customer';
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
     return Scaffold(
-      appBar: const CustomAppBar(title: 'Repayments & Collection Register'),
+      appBar: CustomAppBar(
+        title: isCustomer ? 'Pay EMI & History' : 'Repayments & Collection Register',
+      ),
       drawer: const CustomDrawer(currentRoute: '/payments'),
       body: Column(
         children: [
@@ -287,7 +294,7 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
               children: [
                 Expanded(
                   child: KpiCard(
-                    title: "Today's Collection",
+                    title: isCustomer ? 'Paid Today' : "Today's Collection",
                     value: currency.format(_todayCollection),
                     icon: Icons.payments_outlined,
                     iconColor: AppTheme.success,
@@ -297,7 +304,7 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: KpiCard(
-                    title: 'Due Installments',
+                    title: isCustomer ? 'EMIs Ready to Pay' : 'Due Installments',
                     value: '${_dueLoans.length}',
                     icon: Icons.schedule,
                     iconColor: AppTheme.warning,
@@ -315,7 +322,7 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
               unselectedLabelColor: AppTheme.textSecondary,
               indicatorColor: AppTheme.tealPrimary,
               tabs: [
-                Tab(text: 'Due for Collection (${_dueLoans.length})'),
+                Tab(text: '${isCustomer ? 'Pay EMI' : 'Due for Collection'} (${_dueLoans.length})'),
                 Tab(text: 'Recent Receipts (${_recentPayments.length})'),
               ],
             ),
@@ -374,7 +381,7 @@ class _PaymentsRegisterScreenState extends State<PaymentsRegisterScreen>
                                           backgroundColor: AppTheme.success,
                                           padding: const EdgeInsets.symmetric(horizontal: 10),
                                         ),
-                                        child: const Text('Collect', style: TextStyle(fontSize: 12)),
+                                        child: Text(isCustomer ? 'Pay EMI' : 'Collect', style: const TextStyle(fontSize: 12)),
                                       ),
                                     ),
                                   );
